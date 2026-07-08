@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 10% 3.9%;
+    --radius: 0.5rem;
+    /* Sidebar */
+    --sidebar: 240 20% 98%;
+    --sidebar-border: 240 5.9% 90%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+    /* Sidebar */
+    --sidebar: 240 15% 5%;
+    --sidebar-border: 240 6% 14%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ── Auth page keyframe animations ── */
+
+@keyframes auth-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33%       { transform: translateY(-18px) rotate(0.8deg); }
+  66%       { transform: translateY(-8px) rotate(-0.6deg); }
+}
+
+@keyframes auth-float-alt {
+  0%, 100% { transform: translateY(0px) translateX(0px) rotate(0deg); }
+  25%       { transform: translateY(-12px) translateX(8px) rotate(0.5deg); }
+  75%       { transform: translateY(-20px) translateX(-6px) rotate(-0.4deg); }
+}
+
+@keyframes auth-fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes auth-scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-fade-up-1 {
+    animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.06s both;
+  }
+  .animate-fade-up-2 {
+    animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+  }
+  .animate-fade-up-3 {
+    animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both;
+  }
+  .animate-fade-up-4 {
+    animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.3s ease both;
+  }
+  /* App shell sidebar token */
+  .bg-sidebar { background-color: hsl(var(--sidebar)); }
+  .border-sidebar { border-color: hsl(var(--sidebar-border)); }
+
+  .animate-auth-float {
+    animation: auth-float 9s ease-in-out infinite;
+  }
+
+  .animate-auth-float-alt {
+    animation: auth-float-alt 13s ease-in-out infinite;
+  }
+
+  .animate-auth-float-slow {
+    animation: auth-float 11s ease-in-out infinite 2.5s;
+  }
+
+  .animate-auth-enter {
+    animation: auth-fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-auth-enter-delay-1 {
+    animation: auth-fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+  }
+
+  .animate-auth-enter-delay-2 {
+    animation: auth-fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.16s both;
+  }
+
+  .animate-auth-enter-delay-3 {
+    animation: auth-fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both;
+  }
+
+  .animate-auth-scale {
+    animation: auth-scale-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Dot-grid background pattern for auth pages */
+  .auth-dot-grid {
+    background-image: radial-gradient(
+      circle,
+      hsl(var(--foreground) / 0.06) 1px,
+      transparent 1px
+    );
+    background-size: 28px 28px;
+  }
+}

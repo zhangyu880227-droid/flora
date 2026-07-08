@@ -1,0 +1,9 @@
+{
+  "name": "@flora/tailwind-config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./index.ts",
+  "dependencies": {
+    "tailwindcss": "^3.4.14"
+  }
+}

@@ -1,0 +1,21 @@
+# Dev overrides: hot-reload mounts, debug ports
+services:
+  api:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./apps/api:/app
+      - uploads:/data/uploads
+
+  worker:
+    command: celery -A app.tasks.celery_app worker --loglevel=debug --concurrency=2
+    volumes:
+      - ./apps/api:/app
+      - uploads:/data/uploads
+
+  web:
+    command: pnpm dev
+    volumes:
+      - ./apps/web:/app/apps/web
+      - ./packages:/app/packages
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
