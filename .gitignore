@@ -41,6 +41,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Flora Factory
+.flora/logs/
+
 # Test coverage
 coverage
 .coverage

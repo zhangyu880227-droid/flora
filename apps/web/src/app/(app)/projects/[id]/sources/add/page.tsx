@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { use, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, FileUp, Globe, Loader2 } from "lucide-react"
@@ -9,8 +9,8 @@ import { sourcesApi } from "@/lib/api"
 
 type Tab = "url" | "pdf"
 
-export default function AddSourcePage({ params }: { params: { id: string } }) {
-  const { id: projectId } = params
+export default function AddSourcePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: projectId } = use(params)
   const router = useRouter()
 
   const [tab, setTab] = useState<Tab>("url")

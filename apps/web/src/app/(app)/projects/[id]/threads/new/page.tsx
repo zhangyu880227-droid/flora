@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { use, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { threadsApi } from "@/lib/api"
 
-export default function NewThreadPage({ params }: { params: { id: string } }) {
-  const { id: projectId } = params
+export default function NewThreadPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: projectId } = use(params)
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
 

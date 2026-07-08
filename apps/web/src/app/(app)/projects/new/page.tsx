@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, FolderOpen, Loader2 } from "lucide-react"
@@ -9,7 +9,7 @@ import { Button, Card, CardContent, Input, Label } from "@flora/ui"
 import { projectsApi, workspacesApi } from "@/lib/api"
 import { useWorkspaceStore } from "@/stores/workspace"
 
-export default function NewProjectPage() {
+function NewProjectContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { activeWorkspaceId } = useWorkspaceStore()
@@ -123,5 +123,13 @@ export default function NewProjectPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function NewProjectPage() {
+  return (
+    <Suspense>
+      <NewProjectContent />
+    </Suspense>
   )
 }

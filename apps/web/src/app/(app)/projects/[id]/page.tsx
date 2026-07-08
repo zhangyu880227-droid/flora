@@ -1,5 +1,6 @@
 "use client"
 
+import { use } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { FileText, Globe, MessageSquare, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react"
@@ -14,8 +15,8 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   error: "destructive",
 }
 
-export default function ProjectPage({ params }: { params: { id: string } }) {
-  const { id } = params
+export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
   const queryClient = useQueryClient()
 
   const { data: project, isLoading: projectLoading } = useQuery({

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { use, useEffect, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Send } from "lucide-react"
 import { Button, Input, ScrollArea } from "@flora/ui"
@@ -8,8 +8,8 @@ import { threadsApi } from "@/lib/api"
 import type { Message } from "@flora/types"
 import { cn } from "@flora/ui"
 
-export default function ThreadPage({ params }: { params: { id: string } }) {
-  const { id } = params
+export default function ThreadPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
   const [input, setInput] = useState("")
   const [streaming, setStreaming] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
