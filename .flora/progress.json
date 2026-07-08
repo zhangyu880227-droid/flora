@@ -1,0 +1,14 @@
+{
+  "started_at": "2026-07-08T00:00:00Z",
+  "current": null,
+  "completed": [],
+  "failed": [
+    {
+      "id": "001",
+      "title": "Audit project structure and document architecture",
+      "reason": "Build unfixable: build could not be fixed after 2 attempts",
+      "failed_at": "2026-07-08T07:20:00.916Z"
+    }
+  ],
+  "updated_at": "2026-07-08T07:20:00.916Z"
+}

@@ -58,7 +58,7 @@ export default function AddSourcePage({ params }: { params: Promise<{ id: string
       </div>
 
       {/* Tab switcher */}
-      <div className="mb-4 flex rounded-lg border bg-muted/40 p-1">
+      <div className="mb-4 flex rounded-xl border bg-muted/40 p-1">
         <button
           type="button"
           onClick={() => setTab("url")}

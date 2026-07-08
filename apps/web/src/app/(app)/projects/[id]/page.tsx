@@ -395,12 +395,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           {/* Stats */}
           <div className="grid grid-cols-2 gap-2">
             {[
-              { label: "Sources",  value: sources.length,  color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
-              { label: "Ready",    value: readyCount,      color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
-              { label: "Threads",  value: threads.length,  color: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
-              { label: "Insights", value: insights.length, color: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className={cn("flex flex-col rounded-xl p-3", color.split(" ").slice(-1).join(" ").replace("text-", "bg-").replace(/dark.*/, "") || "bg-muted/50")}>
+              { label: "Sources",  value: sources.length,  bg: "bg-blue-500/10" },
+              { label: "Ready",    value: readyCount,      bg: "bg-emerald-500/10" },
+              { label: "Threads",  value: threads.length,  bg: "bg-violet-500/10" },
+              { label: "Insights", value: insights.length, bg: "bg-amber-500/10" },
+            ].map(({ label, value, bg }) => (
+              <div key={label} className={cn("flex flex-col rounded-xl p-3", bg)}>
                 <p className="text-lg font-semibold tabular-nums">{value}</p>
                 <p className="text-xs text-muted-foreground">{label}</p>
               </div>

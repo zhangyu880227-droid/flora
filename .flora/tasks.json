@@ -1,0 +1,94 @@
+{
+  "project": "Flora",
+  "description": "Managed by Flora Factory — autonomous development engine",
+  "tasks": [
+    {
+      "id": "001",
+      "title": "Audit project structure and document architecture",
+      "description": "Read all key files (package.json files, tsconfig, next.config, pyproject.toml, app/ directory in API) and write a ARCHITECTURE.md at the project root summarizing: tech stack, monorepo layout, how web and api connect, key packages. This document will guide all future tasks.",
+      "priority": 1,
+      "status": "failed",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "ARCHITECTURE.md exists at project root",
+        "Documents web stack (Next.js, Tailwind, TypeScript)",
+        "Documents API stack (Python/FastAPI or similar)",
+        "Documents monorepo structure (apps/, packages/)",
+        "Describes how frontend calls backend"
+      ],
+      "created_at": "2026-07-08T00:00:00Z",
+      "updated_at": "2026-07-08T07:20:00.916Z"
+    },
+    {
+      "id": "002",
+      "title": "Add shared TypeScript types for core domain models",
+      "description": "Read the existing packages/types package. Define TypeScript interfaces for the core domain entities visible in the project (e.g. User, any data models you find referenced in apps/web/src). Export them cleanly from packages/types/src/index.ts.",
+      "priority": 2,
+      "status": "pending",
+      "dependencies": [
+        "001"
+      ],
+      "acceptance_criteria": [
+        "packages/types/src/index.ts exports typed interfaces",
+        "Types compile without errors",
+        "At minimum: User type with id, email, createdAt"
+      ],
+      "created_at": "2026-07-08T00:00:00Z",
+      "updated_at": "2026-07-08T00:00:00Z"
+    },
+    {
+      "id": "003",
+      "title": "Set up shared UI component library baseline",
+      "description": "Read packages/ui. Ensure it has: Button, Input, Card components exported from packages/ui/src/index.ts. Each should accept standard HTML props plus a variant prop. Use Tailwind classes. Match the style conventions in apps/web.",
+      "priority": 3,
+      "status": "pending",
+      "dependencies": [
+        "002"
+      ],
+      "acceptance_criteria": [
+        "Button component with variant='primary'|'secondary'|'ghost'",
+        "Input component with label and error props",
+        "Card component with title and children",
+        "All exported from packages/ui/src/index.ts",
+        "TypeScript strict mode compliant"
+      ],
+      "created_at": "2026-07-08T00:00:00Z",
+      "updated_at": "2026-07-08T00:00:00Z"
+    },
+    {
+      "id": "004",
+      "title": "Implement health check endpoints in web and API",
+      "description": "Add a /api/health route to apps/web (Next.js route handler at app/api/health/route.ts) returning {status:'ok',ts:Date}. Read apps/api to find the FastAPI app entry point and add a /health GET endpoint there too.",
+      "priority": 4,
+      "status": "pending",
+      "dependencies": [
+        "001"
+      ],
+      "acceptance_criteria": [
+        "apps/web/src/app/api/health/route.ts returns 200 {status:'ok'}",
+        "apps/api has GET /health returning {status:'ok'}",
+        "Both endpoints include a timestamp"
+      ],
+      "created_at": "2026-07-08T00:00:00Z",
+      "updated_at": "2026-07-08T00:00:00Z"
+    },
+    {
+      "id": "005",
+      "title": "Add environment variable validation at startup",
+      "description": "For apps/web: create src/env.ts using zod to validate required env vars (NEXT_PUBLIC_API_URL minimum). Import and run it in next.config.ts. For apps/api: validate required vars (DATABASE_URL, SECRET_KEY minimum) at startup with a clear error message if missing.",
+      "priority": 5,
+      "status": "pending",
+      "dependencies": [
+        "001"
+      ],
+      "acceptance_criteria": [
+        "apps/web/src/env.ts validates env vars with zod",
+        "Missing env var crashes startup with clear message",
+        "API validates its required env vars at startup",
+        "No runtime surprises from missing config"
+      ],
+      "created_at": "2026-07-08T00:00:00Z",
+      "updated_at": "2026-07-08T00:00:00Z"
+    }
+  ]
+}
