@@ -169,6 +169,19 @@ export const knowledgeApi = {
     api.get<Array<{ entity: string; gapType: string; description: string; suggestedQuery: string; priority: number }>>(
       `/workspaces/${workspaceId}/knowledge/gaps?limit=${limit}`
     ),
+  ask: (workspaceId: string, question: string, limit = 5) =>
+    api.post<{ answer: string; sources: Array<{ id: string; title: string; url: string | null; source_type: string; confidence_score: number }> }>(
+      `/workspaces/${workspaceId}/knowledge/ask`,
+      { question, limit }
+    ),
+  trending: (workspaceId: string, hours = 24, limit = 10) =>
+    api.get<Array<{ name: string; entity_type: string; recent_count: number; total_count: number; trend_pct: number; node_id: string | null }>>(
+      `/workspaces/${workspaceId}/knowledge/trending?hours=${hours}&limit=${limit}`
+    ),
+  briefing: (workspaceId: string) =>
+    api.get<{ briefing: string; generatedAt: string; docCount: number; nodeCount: number; recentDocCount: number }>(
+      `/workspaces/${workspaceId}/knowledge/briefing`
+    ),
 }
 
 // Knowledge Graph

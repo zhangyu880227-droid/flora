@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { Search } from "lucide-react"
 import type { KGEdge, KGNode, KnowledgeDocument, KnowledgeGraphStats, KnowledgeStats } from "@flora/types"
 import { knowledgeApi, knowledgeGraphApi } from "@/lib/api"
 import { useWorkspaceStore } from "@/stores/workspace"
@@ -9,7 +10,6 @@ import { KnowledgeGraph } from "@/components/atlas/knowledge-graph"
 import { MetricBar } from "@/components/atlas/metric-bar"
 import { ResearchPanel } from "@/components/atlas/research-panel"
 
-// ── gap shape from /knowledge/gaps endpoint ───────────────────────────────────
 interface GapTask {
   entity:         string
   gapType:        string
@@ -18,7 +18,6 @@ interface GapTask {
   priority:       number
 }
 
-// ── helpers ───────────────────────────────────────────────────────────────────
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return "never"
   const diff = Date.now() - new Date(iso).getTime()
@@ -30,16 +29,29 @@ function timeAgo(iso: string | null | undefined): string {
   return `${Math.floor(hr / 24)}d ago`
 }
 
-// ── refresh intervals ─────────────────────────────────────────────────────────
-const STATS_INTERVAL   = 30_000   // 30 s  — metrics bar
-const DOCS_INTERVAL    = 120_000  // 2 min — feed panel
-const GRAPH_INTERVAL   = 300_000  // 5 min — graph nodes + edges
-const GAPS_INTERVAL    = 600_000  // 10 min — gaps panel
+const STATS_INTERVAL   = 30_000
+const DOCS_INTERVAL    = 120_000
+const GRAPH_INTERVAL   = 300_000
+const GAPS_INTERVAL    = 600_000
+
+// Entity type colours (shared)
+const TYPE_COLOR: Record<string, string> = {
+  tech:     "#58a6ff",
+  org:      "#ffa657",
+  person:   "#3fb950",
+  concept:  "#bc8cff",
+  place:    "#f85149",
+  country:  "#58d9a8",
+  event:    "#d29922",
+  product:  "#e5a0ff",
+  industry: "#c9a44a",
+}
+
+const ALL_TYPES = Object.keys(TYPE_COLOR)
 
 export default function AtlasPage() {
   const workspaceId = useWorkspaceStore(s => s.activeWorkspaceId)
 
-  // data state
   const [nodes,      setNodes]      = useState<KGNode[]>([])
   const [edges,      setEdges]      = useState<KGEdge[]>([])
   const [docs,       setDocs]       = useState<KnowledgeDocument[]>([])
@@ -51,13 +63,15 @@ export default function AtlasPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [error,      setError]      = useState<string | null>(null)
 
-  // live indicator — flashes when a poll completes
+  // graph controls
+  const [activeTypes,  setActiveTypes]  = useState<Set<string>>(new Set(ALL_TYPES))
+  const [graphSearch,  setGraphSearch]  = useState("")
+
   const [pulse, setPulse] = useState(false)
   const flash = () => { setPulse(true); setTimeout(() => setPulse(false), 600) }
 
   const selectedNode = nodes.find(n => n.id === selectedId) ?? null
 
-  // ── initial full load ─────────────────────────────────────────────────────
   const fetchAll = useCallback(async (wsId: string) => {
     try {
       const [nodesData, edgesData, docsData, gStatsData, kStatsData, gapsData] = await Promise.all([
@@ -86,37 +100,25 @@ export default function AtlasPage() {
     fetchAll(workspaceId).finally(() => setLoading(false))
   }, [workspaceId, fetchAll])
 
-  // ── auto-refresh: stats (30s) ──────────────────────────────────────────────
   useEffect(() => {
     if (!workspaceId) return
     const id = setInterval(async () => {
       try {
-        const [gs, ks] = await Promise.all([
-          knowledgeGraphApi.stats(workspaceId),
-          knowledgeApi.stats(workspaceId),
-        ])
-        setGraphStats(gs)
-        setKStats(ks)
-        flash()
+        const [gs, ks] = await Promise.all([knowledgeGraphApi.stats(workspaceId), knowledgeApi.stats(workspaceId)])
+        setGraphStats(gs); setKStats(ks); flash()
       } catch { /* ignore */ }
     }, STATS_INTERVAL)
     return () => clearInterval(id)
   }, [workspaceId])
 
-  // ── auto-refresh: feed docs (2 min) ───────────────────────────────────────
   useEffect(() => {
     if (!workspaceId) return
     const id = setInterval(async () => {
-      try {
-        const docs = await knowledgeApi.documents(workspaceId, { limit: 50 })
-        setDocs(docs)
-        flash()
-      } catch { /* ignore */ }
+      try { setDocs(await knowledgeApi.documents(workspaceId, { limit: 50 })); flash() } catch { /* ignore */ }
     }, DOCS_INTERVAL)
     return () => clearInterval(id)
   }, [workspaceId])
 
-  // ── auto-refresh: graph (5 min) ────────────────────────────────────────────
   useEffect(() => {
     if (!workspaceId) return
     const id = setInterval(async () => {
@@ -125,27 +127,20 @@ export default function AtlasPage() {
           knowledgeGraphApi.nodes(workspaceId, { limit: 200 }),
           knowledgeGraphApi.edges(workspaceId, { limit: 500 }),
         ])
-        setNodes(n)
-        setEdges(e)
-        flash()
+        setNodes(n); setEdges(e); flash()
       } catch { /* ignore */ }
     }, GRAPH_INTERVAL)
     return () => clearInterval(id)
   }, [workspaceId])
 
-  // ── auto-refresh: gaps (10 min) ────────────────────────────────────────────
   useEffect(() => {
     if (!workspaceId) return
     const id = setInterval(async () => {
-      try {
-        const gaps = await knowledgeApi.gaps(workspaceId)
-        setGapTasks(gaps)
-      } catch { /* ignore */ }
+      try { setGapTasks(await knowledgeApi.gaps(workspaceId)) } catch { /* ignore */ }
     }, GAPS_INTERVAL)
     return () => clearInterval(id)
   }, [workspaceId])
 
-  // ── manual refresh cycle ───────────────────────────────────────────────────
   const handleRefresh = useCallback(async () => {
     if (!workspaceId || refreshing) return
     setRefreshing(true)
@@ -158,21 +153,29 @@ export default function AtlasPage() {
     }
   }, [workspaceId, refreshing, fetchAll])
 
-  // ── metric bar ─────────────────────────────────────────────────────────────
   const metrics = [
-    { label: "DOCS",   value: kStats?.totalDocs   ?? 0, color: "#58a6ff" },
-    { label: "TODAY",  value: kStats?.docsToday   ?? 0, color: "#3fb950" },
-    { label: "NODES",  value: graphStats?.nodeCount ?? 0, color: "#bc8cff" },
-    { label: "EDGES",  value: graphStats?.edgeCount ?? 0, color: "#ffa657" },
-    { label: "FEEDS",  value: kStats?.activeFeeds  ?? 0, color: "#d29922" },
-    { label: "GAPS",   value: gapTasks.length,            color: "#f85149" },
+    { label: "DOCS",  value: kStats?.totalDocs    ?? 0, color: "#58a6ff" },
+    { label: "TODAY", value: kStats?.docsToday    ?? 0, color: "#3fb950" },
+    { label: "NODES", value: graphStats?.nodeCount ?? 0, color: "#bc8cff" },
+    { label: "EDGES", value: graphStats?.edgeCount ?? 0, color: "#ffa657" },
+    { label: "FEEDS", value: kStats?.activeFeeds   ?? 0, color: "#d29922" },
+    { label: "GAPS",  value: gapTasks.length,            color: "#f85149" },
   ]
 
-  const lastUpdated = kStats?.latestRun?.completedAt
-    ? timeAgo(kStats.latestRun.completedAt)
-    : undefined
+  const lastUpdated = kStats?.latestRun?.completedAt ? timeAgo(kStats.latestRun.completedAt) : undefined
 
-  // ── no workspace ──────────────────────────────────────────────────────────
+  function toggleType(t: string) {
+    setActiveTypes(prev => {
+      const next = new Set(prev)
+      if (next.has(t)) { next.delete(t) } else { next.add(t) }
+      return next
+    })
+  }
+
+  function toggleAllTypes() {
+    setActiveTypes(prev => prev.size === ALL_TYPES.length ? new Set() : new Set(ALL_TYPES))
+  }
+
   if (!workspaceId) {
     return (
       <div className="flex h-screen items-center justify-center" style={{ background: "var(--atlas-bg)" }}>
@@ -184,11 +187,7 @@ export default function AtlasPage() {
   }
 
   return (
-    <div
-      className="flex h-screen flex-col overflow-hidden"
-      style={{ background: "var(--atlas-bg)", color: "var(--atlas-text)" }}
-    >
-      {/* ── top metric bar ── */}
+    <div className="flex h-screen flex-col overflow-hidden" style={{ background: "var(--atlas-bg)", color: "var(--atlas-text)" }}>
       <MetricBar
         title="ATLAS"
         metrics={metrics}
@@ -198,10 +197,7 @@ export default function AtlasPage() {
         lastUpdated={lastUpdated ? `Updated ${lastUpdated}` : undefined}
       />
 
-      {/* ── three-column body ── */}
       <div className="flex min-h-0 flex-1">
-
-        {/* LEFT — navigation */}
         <AtlasNav
           graphStats={graphStats ? { nodeCount: graphStats.nodeCount, edgeCount: graphStats.edgeCount } : undefined}
           feedStats={kStats ? { totalDocs: kStats.totalDocs, activeFeeds: kStats.activeFeeds } : undefined}
@@ -209,98 +205,103 @@ export default function AtlasPage() {
 
         {/* CENTRE — knowledge graph */}
         <div className="relative min-w-0 flex-1 overflow-hidden">
+
+          {/* graph toolbar */}
           <div
-            className="flex h-8 shrink-0 items-center border-b px-4 gap-3"
+            className="flex h-9 shrink-0 items-center gap-2 border-b px-3"
             style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-surface)" }}
           >
-            <span className="font-mono text-[9px] font-bold uppercase tracking-widest" style={{ color: "var(--atlas-text-3)" }}>
+            <span className="font-mono text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: "var(--atlas-text-3)" }}>
               Knowledge Graph
             </span>
+
+            {/* type filter pills */}
+            <div className="flex items-center gap-0.5 ml-1">
+              <button
+                onClick={toggleAllTypes}
+                className="rounded px-1.5 py-0.5 font-mono text-[7.5px] font-bold border transition-colors"
+                style={{
+                  borderColor: "var(--atlas-border)",
+                  background: activeTypes.size === ALL_TYPES.length ? "var(--atlas-surface-2)" : "transparent",
+                  color: "var(--atlas-text-3)",
+                }}
+                title="Toggle all types"
+              >
+                ALL
+              </button>
+              {ALL_TYPES.map(t => {
+                const color = TYPE_COLOR[t]
+                const on = activeTypes.has(t)
+                return (
+                  <button
+                    key={t}
+                    onClick={() => toggleType(t)}
+                    title={t}
+                    className="flex h-4 w-4 items-center justify-center rounded-full border transition-opacity"
+                    style={{
+                      background: on ? `${color}30` : "transparent",
+                      borderColor: on ? color : "var(--atlas-border)",
+                      opacity: on ? 1 : 0.35,
+                    }}
+                  >
+                    <div className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* graph search */}
+            <div className="ml-auto flex items-center gap-1.5 rounded border px-2 py-0.5" style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-surface-2)" }}>
+              <Search className="h-3 w-3 shrink-0" style={{ color: "var(--atlas-text-3)" }} />
+              <input
+                value={graphSearch}
+                onChange={e => setGraphSearch(e.target.value)}
+                placeholder="search nodes…"
+                className="w-24 bg-transparent font-mono text-[9.5px] outline-none"
+                style={{ color: "var(--atlas-text)" }}
+              />
+              {graphSearch && (
+                <button onClick={() => setGraphSearch("")} className="font-mono text-[9px]" style={{ color: "var(--atlas-text-3)" }}>×</button>
+              )}
+            </div>
+
             {selectedNode && (
               <>
-                <span style={{ color: "var(--atlas-text-3)" }}>›</span>
-                <span className="font-mono text-[9px] font-semibold capitalize" style={{ color: "var(--atlas-cyan)" }}>
-                  {selectedNode.label}
-                </span>
-                <button
-                  onClick={() => setSelectedId(null)}
-                  className="ml-auto font-mono text-[9px] hover:opacity-80"
-                  style={{ color: "var(--atlas-text-3)" }}
-                >
-                  clear ×
-                </button>
+                <span style={{ color: "var(--atlas-text-3)" }} className="font-mono text-[9px]">›</span>
+                <span className="font-mono text-[9px] font-semibold capitalize" style={{ color: "var(--atlas-cyan)" }}>{selectedNode.label}</span>
+                <button onClick={() => setSelectedId(null)} className="font-mono text-[9px] hover:opacity-80" style={{ color: "var(--atlas-text-3)" }}>×</button>
               </>
             )}
             {loading && (
-              <span className="ml-auto font-mono text-[9px] animate-atlas-pulse" style={{ color: "var(--atlas-text-3)" }}>
-                loading…
-              </span>
+              <span className="font-mono text-[9px] animate-pulse ml-2" style={{ color: "var(--atlas-text-3)" }}>loading…</span>
             )}
             {error && !loading && (
-              <span className="ml-auto font-mono text-[9px]" style={{ color: "var(--atlas-red)" }}>
-                {error}
-              </span>
+              <span className="font-mono text-[9px] ml-2" style={{ color: "var(--atlas-red)" }}>{error}</span>
             )}
           </div>
 
-          <div className="absolute inset-0 top-8">
+          <div className="absolute inset-0 top-9">
             <KnowledgeGraph
               nodes={nodes}
               edges={edges}
               selectedId={selectedId}
               onSelect={setSelectedId}
+              activeTypes={activeTypes}
+              searchQuery={graphSearch}
             />
           </div>
-
-          {!loading && nodes.length > 0 && (
-            <div
-              className="absolute bottom-4 left-4 rounded-lg border px-3 py-2"
-              style={{ background: "var(--atlas-surface)", borderColor: "var(--atlas-border)" }}
-            >
-              <ByTypeLegend nodes={nodes} />
-            </div>
-          )}
         </div>
 
-        {/* RIGHT — research panel */}
         <ResearchPanel
           docs={docs}
           nodes={nodes}
           edges={edges}
           selectedNode={selectedNode}
           gapTasks={gapTasks}
+          workspaceId={workspaceId ?? undefined}
+          onSelectNode={setSelectedId}
         />
       </div>
-    </div>
-  )
-}
-
-// ── entity-type breakdown legend ──────────────────────────────────────────────
-const TYPE_COLOR: Record<string, string> = {
-  tech:     "#58a6ff",
-  org:      "#ffa657",
-  person:   "#3fb950",
-  concept:  "#bc8cff",
-  place:    "#f85149",
-  country:  "#f85149",
-  event:    "#d29922",
-  product:  "#58d9a8",
-  industry: "#e5a0ff",
-}
-
-function ByTypeLegend({ nodes }: { nodes: KGNode[] }) {
-  const counts: Record<string, number> = {}
-  for (const n of nodes) counts[n.entityType] = (counts[n.entityType] ?? 0) + 1
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1])
-  return (
-    <div className="flex flex-col gap-1">
-      {sorted.map(([type, count]) => (
-        <div key={type} className="flex items-center gap-2">
-          <div className="h-1.5 w-1.5 rounded-full" style={{ background: TYPE_COLOR[type] ?? "#8b949e" }} />
-          <span className="font-mono text-[9px] capitalize" style={{ color: "var(--atlas-text-2)" }}>{type}</span>
-          <span className="ml-auto pl-3 font-mono text-[9px] tabular-nums" style={{ color: "var(--atlas-text-3)" }}>{count}</span>
-        </div>
-      ))}
     </div>
   )
 }

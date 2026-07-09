@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
-import { Network, FileText, TrendingUp } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { Network, FileText, TrendingUp, MessageSquare, Zap, Rss } from "lucide-react"
 import { cn } from "@flora/ui"
-import type { KGEdge, KGNode, KnowledgeDocument } from "@flora/types"
+import type { KGEdge, KGNode, KnowledgeDocument, KnowledgeFeed } from "@flora/types"
+import { knowledgeApi } from "@/lib/api"
 import { FeedCard } from "./feed-card"
 
 const TYPE_COLOR: Record<string, string> = {
@@ -12,46 +13,57 @@ const TYPE_COLOR: Record<string, string> = {
   person:  "#3fb950",
   concept: "#bc8cff",
   place:   "#f85149",
+  country: "#58d9a8",
   event:   "#d29922",
+  product: "#e5a0ff",
   default: "#8b949e",
 }
 function entityColor(t: string) { return TYPE_COLOR[t] ?? TYPE_COLOR.default }
 
-
-type Tab = "feed" | "entity" | "gaps"
+type Tab = "feed" | "ask" | "briefing" | "entity" | "gaps" | "feeds"
 
 interface ResearchPanelProps {
-  docs:         KnowledgeDocument[]
-  nodes:        KGNode[]
-  edges:        KGEdge[]
-  selectedNode: KGNode | null
-  gapTasks:     Array<{ entity: string; gapType: string; description: string; suggestedQuery: string }>
+  docs:          KnowledgeDocument[]
+  nodes:         KGNode[]
+  edges:         KGEdge[]
+  selectedNode:  KGNode | null
+  gapTasks:      Array<{ entity: string; gapType: string; description: string; suggestedQuery: string }>
+  workspaceId?:  string
+  onSelectNode?: (id: string) => void
 }
 
-export function ResearchPanel({ docs, nodes, edges, selectedNode, gapTasks }: ResearchPanelProps) {
-  const [tab, setTab] = useState<Tab>(selectedNode ? "entity" : "feed")
+export function ResearchPanel({
+  docs, nodes, edges, selectedNode, gapTasks, workspaceId, onSelectNode,
+}: ResearchPanelProps) {
+  const [tab, setTab] = useState<Tab>("feed")
 
-  // switch to entity tab when selection changes
-  if (selectedNode && tab === "feed") setTab("entity")
-  if (!selectedNode && tab === "entity") setTab("feed")
+  // auto-switch to entity tab when a node is selected
+  useEffect(() => {
+    if (selectedNode) setTab("entity")
+  }, [selectedNode?.id])
 
   return (
     <div
-      className="flex h-full w-[320px] shrink-0 flex-col border-l"
+      className="flex h-full w-[340px] shrink-0 flex-col border-l"
       style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-surface)" }}
     >
-      {/* tab bar */}
-      <div className="flex shrink-0 border-b" style={{ borderColor: "var(--atlas-border)" }}>
-        <TabBtn active={tab === "feed"}   label="Feed"   icon={FileText}   onClick={() => setTab("feed")} />
-        <TabBtn active={tab === "entity"} label="Entity" icon={Network}    onClick={() => setTab("entity")} disabled={!selectedNode} />
-        <TabBtn active={tab === "gaps"}   label={`Gaps${gapTasks.length ? ` (${gapTasks.length})` : ""}`} icon={TrendingUp} onClick={() => setTab("gaps")} />
+      {/* tab bar — two rows for 6 tabs */}
+      <div className="flex shrink-0 flex-wrap border-b" style={{ borderColor: "var(--atlas-border)" }}>
+        <TabBtn active={tab === "feed"}     label="Feed"     icon={FileText}       onClick={() => setTab("feed")} />
+        <TabBtn active={tab === "ask"}      label="Ask"      icon={MessageSquare}  onClick={() => setTab("ask")} />
+        <TabBtn active={tab === "briefing"} label="Intel"    icon={Zap}            onClick={() => setTab("briefing")} />
+        <TabBtn active={tab === "entity"}   label="Entity"   icon={Network}        onClick={() => setTab("entity")} disabled={!selectedNode} />
+        <TabBtn active={tab === "gaps"}     label={`Gaps${gapTasks.length ? ` (${gapTasks.length})` : ""}`} icon={TrendingUp} onClick={() => setTab("gaps")} />
+        <TabBtn active={tab === "feeds"}    label="Sources"  icon={Rss}            onClick={() => setTab("feeds")} />
       </div>
 
-      {/* content */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {tab === "feed" && <FeedTab docs={docs} />}
-        {tab === "entity" && <EntityTab node={selectedNode} edges={edges} nodes={nodes} />}
-        {tab === "gaps" && <GapsTab gaps={gapTasks} />}
+        {tab === "feed"     && <FeedTab docs={docs} />}
+        {tab === "ask"      && <AskTab workspaceId={workspaceId} onSelectNode={onSelectNode} />}
+        {tab === "briefing" && <BriefingTab workspaceId={workspaceId} />}
+        {tab === "entity"   && <EntityTab node={selectedNode} edges={edges} nodes={nodes} />}
+        {tab === "gaps"     && <GapsTab gaps={gapTasks} />}
+        {tab === "feeds"    && <FeedsTab workspaceId={workspaceId} />}
       </div>
     </div>
   )
@@ -59,14 +71,247 @@ export function ResearchPanel({ docs, nodes, edges, selectedNode, gapTasks }: Re
 
 // ── Feed tab ──────────────────────────────────────────────────────────────────
 function FeedTab({ docs }: { docs: KnowledgeDocument[] }) {
-  if (!docs.length) {
-    return <Empty msg="No documents collected yet" />
-  }
+  if (!docs.length) return <Empty msg="No documents collected yet" />
   return (
     <div>
-      {docs.slice(0, 40).map(d => (
-        <FeedCard key={d.id} doc={d} />
-      ))}
+      {docs.slice(0, 40).map(d => <FeedCard key={d.id} doc={d} />)}
+    </div>
+  )
+}
+
+// ── Ask Flora tab ─────────────────────────────────────────────────────────────
+interface AskMessage {
+  role: "user" | "assistant"
+  content: string
+  sources?: Array<{ id: string; title: string; url: string | null; source_type: string; confidence_score: number }>
+}
+
+function AskTab({ workspaceId, onSelectNode }: { workspaceId?: string; onSelectNode?: (id: string) => void }) {
+  const [messages, setMessages] = useState<AskMessage[]>([])
+  const [input, setInput] = useState("")
+  const [loading, setLoading] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  async function submit() {
+    const q = input.trim()
+    if (!q || !workspaceId || loading) return
+    setInput("")
+    setMessages(m => [...m, { role: "user", content: q }])
+    setLoading(true)
+    try {
+      const res = await knowledgeApi.ask(workspaceId, q)
+      setMessages(m => [...m, { role: "assistant", content: res.answer, sources: res.sources }])
+    } catch {
+      setMessages(m => [...m, { role: "assistant", content: "Failed to get an answer. Is the API running?" }])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const SOURCE_COLOR: Record<string, string> = {
+    rss: "#58a6ff", arxiv: "#f85149", google_news: "#ffa657",
+    github_trending: "#3fb950", sec_edgar: "#58d9a8", default: "#8b949e",
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* messages */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-3">
+        {messages.length === 0 && (
+          <div className="mt-8 text-center px-4 space-y-3">
+            <div className="text-[11px] font-semibold" style={{ color: "var(--atlas-text-2)" }}>
+              Ask Flora anything about the knowledge base
+            </div>
+            <div className="space-y-1.5">
+              {[
+                "What are the key AI trends this week?",
+                "Which companies are acquiring others?",
+                "What's happening in semiconductors?",
+              ].map(q => (
+                <button
+                  key={q}
+                  onClick={() => { setInput(q); }}
+                  className="block w-full rounded border px-2.5 py-1.5 text-left text-[10px] transition-colors hover:bg-white/5"
+                  style={{ borderColor: "var(--atlas-border)", color: "var(--atlas-text-2)" }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg, i) => (
+          <div key={i} className={cn("text-[11px]", msg.role === "user" ? "text-right" : "text-left")}>
+            {msg.role === "user" ? (
+              <span
+                className="inline-block rounded-lg px-3 py-1.5 text-[10.5px]"
+                style={{ background: "var(--atlas-cyan)", color: "#07090f", maxWidth: "80%" }}
+              >
+                {msg.content}
+              </span>
+            ) : (
+              <div>
+                <div
+                  className="rounded-lg border px-3 py-2.5 text-[10.5px] leading-relaxed whitespace-pre-wrap"
+                  style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-surface-2)", color: "var(--atlas-text)" }}
+                >
+                  {msg.content}
+                </div>
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="mt-1.5 space-y-1">
+                    {msg.sources.slice(0, 4).map((src, j) => {
+                      const color = SOURCE_COLOR[src.source_type] ?? SOURCE_COLOR.default
+                      return (
+                        <div
+                          key={j}
+                          className="flex items-center gap-1.5 rounded px-2 py-1 text-[9.5px]"
+                          style={{ background: "var(--atlas-surface-3)" }}
+                        >
+                          <span className="font-mono font-bold" style={{ color }}>
+                            [{j + 1}]
+                          </span>
+                          {src.url ? (
+                            <a href={src.url} target="_blank" rel="noopener noreferrer"
+                              className="flex-1 truncate hover:underline" style={{ color: "var(--atlas-text-2)" }}>
+                              {src.title}
+                            </a>
+                          ) : (
+                            <span className="flex-1 truncate" style={{ color: "var(--atlas-text-2)" }}>{src.title}</span>
+                          )}
+                          <span className="font-mono shrink-0" style={{ color: "var(--atlas-text-3)" }}>
+                            {src.confidence_score.toFixed(2)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {loading && (
+          <div className="flex items-center gap-2 text-[10px]" style={{ color: "var(--atlas-text-3)" }}>
+            <span className="animate-pulse">●</span>
+            <span className="animate-pulse" style={{ animationDelay: "0.2s" }}>●</span>
+            <span className="animate-pulse" style={{ animationDelay: "0.4s" }}>●</span>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* input */}
+      <div className="shrink-0 border-t p-2" style={{ borderColor: "var(--atlas-border)" }}>
+        <div className="flex gap-2">
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit() } }}
+            placeholder="Ask about entities, events, trends…"
+            className="min-w-0 flex-1 rounded border bg-transparent px-2.5 py-1.5 text-[10.5px] outline-none focus:border-[#58a6ff]"
+            style={{ borderColor: "var(--atlas-border)", color: "var(--atlas-text)" }}
+          />
+          <button
+            onClick={submit}
+            disabled={!input.trim() || loading}
+            className="shrink-0 rounded px-2.5 py-1.5 text-[10px] font-semibold transition-opacity disabled:opacity-40"
+            style={{ background: "var(--atlas-cyan)", color: "#07090f" }}
+          >
+            Ask
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Intelligence Briefing tab ─────────────────────────────────────────────────
+function BriefingTab({ workspaceId }: { workspaceId?: string }) {
+  const [briefing, setBriefing] = useState<{
+    briefing: string; generatedAt: string; docCount: number; nodeCount: number; recentDocCount: number
+  } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function load() {
+    if (!workspaceId) return
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await knowledgeApi.briefing(workspaceId)
+      setBriefing(data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to generate briefing")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [workspaceId])
+
+  if (loading) return <LoadingSkeleton rows={6} />
+  if (error) return <Empty msg={error} />
+  if (!briefing) return <Empty msg="No briefing available" />
+
+  const lines = briefing.briefing.split("\n").filter(Boolean)
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[11px] font-semibold" style={{ color: "var(--atlas-text)" }}>
+            Daily Intelligence Briefing
+          </div>
+          <div className="mt-0.5 font-mono text-[9px]" style={{ color: "var(--atlas-text-3)" }}>
+            {briefing.generatedAt ? new Date(briefing.generatedAt).toLocaleString("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+          </div>
+        </div>
+        <button
+          onClick={load}
+          className="rounded px-2 py-1 font-mono text-[9px] transition-colors hover:bg-white/5"
+          style={{ color: "var(--atlas-cyan)", border: `1px solid var(--atlas-border)` }}
+        >
+          Refresh
+        </button>
+      </div>
+
+      {/* stats strip */}
+      <div className="grid grid-cols-2 gap-2">
+        {[
+          { label: "TOTAL DOCS",   value: briefing.docCount },
+          { label: "NEW (24H)",    value: briefing.recentDocCount },
+          { label: "ENTITIES",     value: briefing.nodeCount },
+        ].map(s => (
+          <div
+            key={s.label}
+            className="rounded border p-2 text-center"
+            style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-surface-2)" }}
+          >
+            <div className="font-mono text-[14px] font-bold" style={{ color: "var(--atlas-cyan)" }}>{s.value}</div>
+            <div className="font-mono text-[8px] font-semibold uppercase tracking-wider" style={{ color: "var(--atlas-text-3)" }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* briefing bullets */}
+      <div className="space-y-2">
+        {lines.map((line, i) => {
+          const clean = line.replace(/^[-•*]\s*/, "")
+          return (
+            <div key={i} className="flex gap-2 text-[10.5px] leading-relaxed" style={{ color: "var(--atlas-text)" }}>
+              <span className="mt-0.5 shrink-0 font-mono" style={{ color: "var(--atlas-cyan)" }}>›</span>
+              <span dangerouslySetInnerHTML={{ __html: clean.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--atlas-text)">$1</strong>') }} />
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -83,7 +328,6 @@ function EntityTab({ node, edges, nodes }: { node: KGNode | null; edges: KGEdge[
 
   return (
     <div className="p-4 animate-atlas-slide-in">
-      {/* entity header */}
       <div className="mb-4 flex items-start gap-3">
         <div
           className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
@@ -101,15 +345,14 @@ function EntityTab({ node, edges, nodes }: { node: KGNode | null; edges: KGEdge[
         </div>
       </div>
 
-      {/* stats row */}
       <div
         className="mb-4 grid grid-cols-3 gap-px rounded-lg overflow-hidden border"
         style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-border)" }}
       >
         {[
-          { label: "DOCS",       value: node.docCount },
-          { label: "RELATIONS",  value: outgoing.length + incoming.length },
-          { label: "RELEVANCE",  value: node.avgRelevance?.toFixed(2) ?? "—" },
+          { label: "DOCS",      value: node.docCount },
+          { label: "RELATIONS", value: outgoing.length + incoming.length },
+          { label: "RELEVANCE", value: node.avgRelevance?.toFixed(2) ?? "—" },
         ].map(s => (
           <div key={s.label} className="flex flex-col items-center gap-0.5 py-2.5" style={{ background: "var(--atlas-surface-2)" }}>
             <span className="font-mono text-[12px] font-bold" style={{ color }}>{s.value}</span>
@@ -118,22 +361,13 @@ function EntityTab({ node, edges, nodes }: { node: KGNode | null; edges: KGEdge[
         ))}
       </div>
 
-      {/* relationships */}
       {outgoing.length > 0 && (
         <section className="mb-4">
-          <SectionHead>Outgoing Relationships</SectionHead>
+          <SectionHead>Outgoing</SectionHead>
           <div className="space-y-1">
             {outgoing.slice(0, 8).map(e => {
               const tgt = nodeById.get(e.targetId)
-              return (
-                <RelRow
-                  key={e.id}
-                  label={e.relation}
-                  target={tgt?.label ?? e.targetId.slice(0, 8)}
-                  targetType={tgt?.entityType ?? ""}
-                  weight={e.weight}
-                />
-              )
+              return <RelRow key={e.id} label={e.relation} target={tgt?.label ?? "?"} targetType={tgt?.entityType ?? ""} weight={e.weight} />
             })}
           </div>
         </section>
@@ -141,26 +375,16 @@ function EntityTab({ node, edges, nodes }: { node: KGNode | null; edges: KGEdge[
 
       {incoming.length > 0 && (
         <section className="mb-4">
-          <SectionHead>Incoming Relationships</SectionHead>
+          <SectionHead>Incoming</SectionHead>
           <div className="space-y-1">
             {incoming.slice(0, 8).map(e => {
               const src = nodeById.get(e.sourceId)
-              return (
-                <RelRow
-                  key={e.id}
-                  label={e.relation}
-                  target={src?.label ?? e.sourceId.slice(0, 8)}
-                  targetType={src?.entityType ?? ""}
-                  weight={e.weight}
-                  incoming
-                />
-              )
+              return <RelRow key={e.id} label={e.relation} target={src?.label ?? "?"} targetType={src?.entityType ?? ""} weight={e.weight} incoming />
             })}
           </div>
         </section>
       )}
 
-      {/* dates */}
       <section>
         <SectionHead>Timeline</SectionHead>
         <div className="space-y-1.5 font-mono text-[10px]" style={{ color: "var(--atlas-text-2)" }}>
@@ -180,46 +404,31 @@ function EntityTab({ node, edges, nodes }: { node: KGNode | null; edges: KGEdge[
 
 // ── Gaps tab ──────────────────────────────────────────────────────────────────
 function GapsTab({ gaps }: { gaps: Array<{ entity: string; gapType: string; description: string; suggestedQuery: string }> }) {
-  if (!gaps.length) {
-    return <Empty msg="No knowledge gaps detected" sub="Run the self-improvement loop to analyse coverage" />
-  }
+  if (!gaps.length) return <Empty msg="No knowledge gaps detected" sub="Run the self-improvement loop to analyse coverage" />
 
   const GAP_COLOR: Record<string, string> = {
-    orphan_reference:    "#f85149",
-    stale_coverage:      "#d29922",
-    low_confidence_hub:  "#bc8cff",
+    orphan_reference:   "#f85149",
+    stale_coverage:     "#d29922",
+    low_confidence_hub: "#bc8cff",
   }
 
   return (
     <div className="p-3 space-y-2">
       {gaps.map((g, i) => {
         const color = GAP_COLOR[g.gapType] ?? "#8b949e"
-        const label = g.gapType.replace(/_/g, " ").toUpperCase()
         return (
-          <div
-            key={i}
-            className="rounded-lg border p-3"
-            style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-surface-2)" }}
-          >
+          <div key={i} className="rounded-lg border p-3" style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-surface-2)" }}>
             <div className="flex items-center gap-2 mb-1.5">
-              <span
-                className="rounded px-1.5 py-0.5 font-mono text-[8px] font-bold"
-                style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}
-              >
-                {label}
+              <span className="rounded px-1.5 py-0.5 font-mono text-[8px] font-bold"
+                style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>
+                {g.gapType.replace(/_/g, " ").toUpperCase()}
               </span>
-              <span className="font-mono text-[10px] font-semibold capitalize" style={{ color: "var(--atlas-text)" }}>
-                {g.entity}
-              </span>
+              <span className="font-mono text-[10px] font-semibold capitalize" style={{ color: "var(--atlas-text)" }}>{g.entity}</span>
             </div>
-            <p className="text-[10.5px] leading-relaxed mb-2" style={{ color: "var(--atlas-text-2)" }}>
-              {g.description}
-            </p>
+            <p className="text-[10.5px] leading-relaxed mb-2" style={{ color: "var(--atlas-text-2)" }}>{g.description}</p>
             <div className="flex items-center gap-1.5">
               <span className="font-mono text-[9px]" style={{ color: "var(--atlas-text-3)" }}>Suggested:</span>
-              <span className="font-mono text-[9px] italic" style={{ color: "var(--atlas-cyan)" }}>
-                {g.suggestedQuery}
-              </span>
+              <span className="font-mono text-[9px] italic" style={{ color: "var(--atlas-cyan)" }}>{g.suggestedQuery}</span>
             </div>
           </div>
         )
@@ -228,7 +437,71 @@ function GapsTab({ gaps }: { gaps: Array<{ entity: string; gapType: string; desc
   )
 }
 
-// ── tiny helpers ──────────────────────────────────────────────────────────────
+// ── Feeds / Sources tab ────────────────────────────────────────────────────────
+function FeedsTab({ workspaceId }: { workspaceId?: string }) {
+  const [feeds, setFeeds] = useState<KnowledgeFeed[]>([])
+  const [loading, setLoading] = useState(false)
+  const [toggling, setToggling] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!workspaceId) return
+    setLoading(true)
+    knowledgeApi.feeds(workspaceId).then(setFeeds).catch(() => {}).finally(() => setLoading(false))
+  }, [workspaceId])
+
+  if (loading) return <LoadingSkeleton rows={8} />
+
+  const SOURCE_COLOR: Record<string, string> = {
+    rss: "#58a6ff", arxiv: "#f85149", google_news: "#ffa657",
+    github_trending: "#3fb950", sec_edgar: "#58d9a8", youtube: "#f85149",
+    url: "#bc8cff", pdf: "#d29922", default: "#8b949e",
+  }
+
+  return (
+    <div className="p-2 space-y-1.5">
+      <div className="flex items-center justify-between px-1 pb-1">
+        <span className="font-mono text-[9px] font-bold uppercase tracking-widest" style={{ color: "var(--atlas-text-3)" }}>
+          {feeds.filter(f => f.isActive).length} active · {feeds.length} total
+        </span>
+      </div>
+      {feeds.map(feed => {
+        const color = SOURCE_COLOR[feed.type] ?? SOURCE_COLOR.default
+        const lastRun = feed.lastCollectedAt
+          ? new Date(feed.lastCollectedAt).toLocaleDateString("en", { month: "short", day: "numeric" })
+          : "never"
+
+        return (
+          <div
+            key={feed.id}
+            className="flex items-center gap-2 rounded border px-2.5 py-2 text-[10px]"
+            style={{
+              borderColor: feed.isActive ? `${color}30` : "var(--atlas-border)",
+              background: feed.isActive ? `${color}08` : "transparent",
+              opacity: feed.isActive ? 1 : 0.5,
+            }}
+          >
+            <span
+              className="shrink-0 rounded px-1 py-0.5 font-mono text-[7.5px] font-bold"
+              style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}
+            >
+              {feed.type.toUpperCase().replace("_", " ")}
+            </span>
+            <span className="flex-1 truncate font-medium" style={{ color: "var(--atlas-text)" }}>{feed.name}</span>
+            <span className="shrink-0 font-mono text-[9px]" style={{ color: "var(--atlas-text-3)" }}>{lastRun}</span>
+            <div
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ background: feed.isActive ? "#3fb950" : "#8b949e" }}
+              title={feed.isActive ? "Active" : "Paused"}
+            />
+          </div>
+        )
+      })}
+      {feeds.length === 0 && <Empty msg="No feeds configured" />}
+    </div>
+  )
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
 function TabBtn({ active, label, icon: Icon, onClick, disabled }: {
   active: boolean; label: string; icon: React.ElementType; onClick: () => void; disabled?: boolean
 }) {
@@ -237,12 +510,12 @@ function TabBtn({ active, label, icon: Icon, onClick, disabled }: {
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2 text-[10.5px] font-medium transition-colors disabled:opacity-30",
+        "flex flex-1 basis-[33%] items-center justify-center gap-1 border-b-2 py-1.5 text-[9.5px] font-medium transition-colors disabled:opacity-30",
         active ? "border-[#58a6ff]" : "border-transparent hover:border-[#21262d]",
       )}
       style={{ color: active ? "var(--atlas-cyan)" : "var(--atlas-text-2)" }}
     >
-      <Icon className="h-3 w-3" />
+      <Icon className="h-2.5 w-2.5 shrink-0" />
       {label}
     </button>
   )
@@ -262,22 +535,25 @@ function RelRow({ label, target, targetType, weight, incoming }: {
   const color = TYPE_COLOR[targetType] ?? TYPE_COLOR.default
   return (
     <div className="flex items-center gap-1.5 text-[10px]">
-      <span className="font-mono" style={{ color: "var(--atlas-text-3)" }}>
-        {incoming ? "←" : "→"}
-      </span>
-      <span className="font-mono italic" style={{ color: "var(--atlas-text-2)" }}>{label}</span>
+      <span className="font-mono" style={{ color: "var(--atlas-text-3)" }}>{incoming ? "←" : "→"}</span>
+      <span className="font-mono italic" style={{ color: "var(--atlas-text-2)" }}>{label.replace(/_/g, " ")}</span>
       <span className="mx-0.5" style={{ color: "var(--atlas-text-3)" }}>·</span>
-      <span
-        className="rounded px-1 py-0.5 font-mono text-[9px]"
-        style={{ background: `${color}15`, color }}
-      >
+      <span className="rounded px-1 py-0.5 font-mono text-[9px]" style={{ background: `${color}15`, color }}>
         {target}
       </span>
       {weight > 1 && (
-        <span className="ml-auto font-mono text-[9px]" style={{ color: "var(--atlas-text-3)" }}>
-          ×{weight}
-        </span>
+        <span className="ml-auto font-mono text-[9px]" style={{ color: "var(--atlas-text-3)" }}>×{weight}</span>
       )}
+    </div>
+  )
+}
+
+function LoadingSkeleton({ rows }: { rows: number }) {
+  return (
+    <div className="p-3 space-y-2">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="h-8 rounded animate-pulse" style={{ background: "var(--atlas-surface-2)", opacity: 1 - i * 0.1 }} />
+      ))}
     </div>
   )
 }

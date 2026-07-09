@@ -4,6 +4,7 @@ browsing collected documents, and triggering manual collection runs.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -11,13 +12,18 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.core.deps import CurrentUser, DB, require_workspace_member
 from app.models.knowledge import KGEdge, KGNode, KnowledgeDocument, KnowledgeFeed, KnowledgeIngestionRun
 from app.models.workspace import WorkspaceRole
 
 router = APIRouter()
+
+
+class AskRequest(BaseModel):
+    question: str
+    limit: int = 5
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -601,3 +607,305 @@ async def list_gaps(
     ]
     gap_tasks.sort(key=lambda g: g["priority"])
     return gap_tasks[:limit]
+
+
+# ── Ask Flora (semantic Q&A over knowledge base) ───────────────────────────────
+
+@router.post("/workspaces/{workspace_id}/knowledge/ask")
+async def ask_knowledge(
+    workspace_id: uuid.UUID,
+    body: AskRequest,
+    current_user: CurrentUser,
+    db: DB,
+) -> dict:
+    """Semantic search + AI synthesis over the knowledge base."""
+    await require_workspace_member(workspace_id, current_user, db)
+
+    if not body.question.strip():
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+
+    # 1. Embed the question
+    try:
+        from app.services.embedding import embed_query
+        q_vec = await embed_query(body.question)
+        vec_str = str(q_vec)
+    except Exception:
+        q_vec = None
+        vec_str = None
+
+    # 2. Semantic search on knowledge_documents
+    docs: list[KnowledgeDocument] = []
+    if vec_str:
+        rows = await db.execute(
+            text("""
+                SELECT id FROM knowledge_documents
+                WHERE workspace_id = :wsid
+                  AND status = 'ready'
+                  AND embedding IS NOT NULL
+                ORDER BY embedding <=> CAST(:vec AS vector)
+                LIMIT :lim
+            """),
+            {"wsid": str(workspace_id), "vec": vec_str, "lim": body.limit},
+        )
+        doc_ids = [r[0] for r in rows.all()]
+        for did in doc_ids:
+            doc = await db.get(KnowledgeDocument, did)
+            if doc:
+                docs.append(doc)
+
+    # 3. Fallback: keyword search on title + summary
+    if not docs:
+        kw = body.question[:100]
+        fallback = await db.execute(
+            select(KnowledgeDocument)
+            .where(
+                KnowledgeDocument.workspace_id == workspace_id,
+                KnowledgeDocument.status == "ready",
+            )
+            .order_by(KnowledgeDocument.importance_score.desc())
+            .limit(body.limit)
+        )
+        docs = list(fallback.scalars().all())
+
+    if not docs:
+        return {"answer": "No relevant documents found in the knowledge base yet.", "sources": []}
+
+    # 4. Build context block
+    context_parts = []
+    for i, doc in enumerate(docs, 1):
+        ents = ", ".join(e.get("name", "") for e in (doc.entities or [])[:5])
+        rels = "; ".join(
+            f"{r.get('from','')} {r.get('relation','')} {r.get('to','')}"
+            for r in (doc.relationships or [])[:3]
+        )
+        part = (
+            f"[{i}] {doc.title}\n"
+            f"Summary: {doc.summary or ''}\n"
+            f"Entities: {ents}\n"
+            f"Relationships: {rels}\n"
+        )
+        context_parts.append(part)
+
+    context = "\n\n".join(context_parts)
+
+    # 5. AI synthesis
+    SYSTEM = (
+        "You are Flora, an AI research analyst. Answer the user's question using only "
+        "the provided knowledge base excerpts. Be concise (3-5 sentences). Cite sources "
+        "using [1], [2] etc. If the answer is not in the sources, say so."
+    )
+    prompt = f"Question: {body.question}\n\nKnowledge Base:\n{context}"
+
+    try:
+        from app.services.ai import get_provider
+        provider = get_provider()
+        answer = await asyncio.wait_for(
+            provider.complete(system=SYSTEM, prompt=prompt),
+            timeout=45.0,
+        )
+    except asyncio.TimeoutError:
+        # Ollama is busy — return a raw summary instead of AI synthesis
+        bullets = "\n".join(f"• [{i}] {d.title}: {(d.summary or '')[:120]}…" for i, d in enumerate(docs, 1))
+        answer = f"(AI synthesis timed out — raw results below)\n\n{bullets}"
+    except Exception as exc:
+        answer = f"AI synthesis unavailable: {exc}"
+
+    sources = [
+        {
+            "id": str(doc.id),
+            "title": doc.title,
+            "url": doc.url,
+            "source_type": doc.source_type,
+            "published_at": doc.published_at,
+            "confidence_score": doc.confidence_score,
+        }
+        for doc in docs
+    ]
+
+    return {"answer": answer, "sources": sources}
+
+
+# ── Trending entities ─────────────────────────────────────────────────────────
+
+@router.get("/workspaces/{workspace_id}/knowledge/trending")
+async def trending_entities(
+    workspace_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DB,
+    hours: int = Query(24, ge=1, le=168),
+    limit: int = Query(10, le=30),
+) -> list[dict]:
+    """Entities with highest mention frequency in recent documents."""
+    await require_workspace_member(workspace_id, current_user, db)
+
+    since = (datetime.now(tz=timezone.utc) - timedelta(hours=hours)).isoformat()
+
+    recent_docs_result = await db.execute(
+        select(KnowledgeDocument)
+        .where(
+            KnowledgeDocument.workspace_id == workspace_id,
+            KnowledgeDocument.status == "ready",
+            KnowledgeDocument.collected_at >= since,
+        )
+    )
+    recent_docs = list(recent_docs_result.scalars().all())
+
+    # Count entity mentions across recent docs
+    counts: dict[tuple[str, str], int] = {}
+    for doc in recent_docs:
+        for ent in (doc.entities or []):
+            name = str(ent.get("name", "")).strip().lower()
+            etype = str(ent.get("type", "concept"))
+            if name:
+                counts[(name, etype)] = counts.get((name, etype), 0) + 1
+
+    sorted_ents = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:limit]
+
+    # Look up overall doc_count from KGNode for trend comparison
+    result = []
+    for (name, etype), recent_count in sorted_ents:
+        node_row = await db.execute(
+            select(KGNode).where(
+                KGNode.workspace_id == workspace_id,
+                KGNode.label == name,
+                KGNode.entity_type == etype,
+            ).limit(1)
+        )
+        node = node_row.scalar_one_or_none()
+        total_count = node.doc_count if node else recent_count
+        trend_pct = round((recent_count / max(total_count, 1)) * 100)
+        result.append({
+            "name": name,
+            "entity_type": etype,
+            "recent_count": recent_count,
+            "total_count": total_count,
+            "trend_pct": trend_pct,
+            "node_id": str(node.id) if node else None,
+        })
+
+    return result
+
+
+# ── Intelligence Briefing ─────────────────────────────────────────────────────
+
+@router.get("/workspaces/{workspace_id}/knowledge/briefing")
+async def intelligence_briefing(
+    workspace_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DB,
+) -> dict:
+    """AI-generated daily intelligence briefing from the knowledge base."""
+    await require_workspace_member(workspace_id, current_user, db)
+
+    now = datetime.now(tz=timezone.utc)
+    since_24h = (now - timedelta(hours=24)).isoformat()
+
+    # Recent docs
+    recent_r = await db.execute(
+        select(KnowledgeDocument)
+        .where(
+            KnowledgeDocument.workspace_id == workspace_id,
+            KnowledgeDocument.status == "ready",
+            KnowledgeDocument.collected_at >= since_24h,
+        )
+        .order_by(KnowledgeDocument.importance_score.desc())
+        .limit(15)
+    )
+    recent_docs = list(recent_r.scalars().all())
+
+    # Top entities
+    top_nodes_r = await db.execute(
+        select(KGNode)
+        .where(KGNode.workspace_id == workspace_id)
+        .order_by(KGNode.doc_count.desc())
+        .limit(10)
+    )
+    top_nodes = list(top_nodes_r.scalars().all())
+
+    # Top edges (relationships)
+    top_edges_r = await db.execute(
+        select(KGEdge, KGNode)
+        .join(KGNode, KGEdge.source_id == KGNode.id)
+        .where(KGEdge.workspace_id == workspace_id)
+        .order_by(KGEdge.weight.desc())
+        .limit(8)
+    )
+    top_edges = list(top_edges_r.all())
+
+    total_docs = await db.scalar(
+        select(func.count(KnowledgeDocument.id)).where(
+            KnowledgeDocument.workspace_id == workspace_id,
+            KnowledgeDocument.status == "ready",
+        )
+    ) or 0
+    node_count = await db.scalar(
+        select(func.count(KGNode.id)).where(KGNode.workspace_id == workspace_id)
+    ) or 0
+
+    if not recent_docs and not top_nodes:
+        return {
+            "briefing": "No intelligence data available yet. Run the knowledge pipeline to collect documents.",
+            "generated_at": now.isoformat(),
+            "doc_count": total_docs,
+            "node_count": node_count,
+            "recent_doc_count": 0,
+        }
+
+    # Build relationship lines without extra async calls
+    edge_lines = []
+    node_id_map: dict[str, KGNode] = {str(n.id): n for n in top_nodes}
+    for edge, src_node in top_edges[:6]:
+        tgt = node_id_map.get(str(edge.target_id))
+        if tgt:
+            rel = edge.relation.replace("_", " ")
+            edge_lines.append(f"**{src_node.label}** {rel} **{tgt.label}** (×{edge.weight})")
+
+    # Build structured briefing directly from data (fast, no LLM timeout risk)
+    bullets: list[str] = []
+
+    # Recent activity
+    if recent_docs:
+        high_imp = [d for d in recent_docs if d.importance_score >= 0.7]
+        if high_imp:
+            bullets.append(
+                f"**{len(high_imp)} high-importance** event{'s' if len(high_imp) != 1 else ''} in the last 24 hours — "
+                + "; ".join(f"**{d.title[:50]}**" for d in high_imp[:3])
+            )
+        else:
+            bullets.append(
+                f"**{len(recent_docs)} documents** collected in the last 24 hours across "
+                + ", ".join(set(d.source_type for d in recent_docs[:5]))
+            )
+
+    # Top entities
+    if top_nodes:
+        orgs  = [n for n in top_nodes if n.entity_type == "org"][:4]
+        techs = [n for n in top_nodes if n.entity_type == "tech"][:3]
+        if orgs:
+            bullets.append(
+                "**Top organisations by coverage:** " + ", ".join(f"**{n.label}** ({n.doc_count})" for n in orgs)
+            )
+        if techs:
+            bullets.append(
+                "**Trending technologies:** " + ", ".join(f"**{n.label}** ({n.doc_count})" for n in techs)
+            )
+
+    # Key relationships
+    if edge_lines:
+        bullets.append("**Key relationships:** " + " · ".join(edge_lines[:3]))
+
+    # Knowledge graph health
+    edge_count = await db.scalar(select(func.count(KGEdge.id)).where(KGEdge.workspace_id == workspace_id)) or 0
+    bullets.append(
+        f"**Knowledge graph:** {total_docs} documents processed → {node_count} entities, {edge_count} relationships"
+    )
+
+    briefing_text = "\n".join(f"- {b}" for b in bullets)
+
+    return {
+        "briefing": briefing_text,
+        "generated_at": now.isoformat(),
+        "doc_count": total_docs,
+        "node_count": node_count,
+        "recent_doc_count": len(recent_docs),
+    }
