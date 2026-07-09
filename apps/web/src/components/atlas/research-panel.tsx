@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { Network, FileText, TrendingUp, MessageSquare, Zap, Rss } from "lucide-react"
+import { useState, useRef, useEffect, useCallback } from "react"
+import { Network, FileText, TrendingUp, MessageSquare, Zap, Rss, Plus, Trash2, ExternalLink } from "lucide-react"
 import { cn } from "@flora/ui"
-import type { KGEdge, KGNode, KnowledgeDocument, KnowledgeFeed } from "@flora/types"
+import type { KGEdge, KGNode, KnowledgeDocument, KnowledgeFeed, KnowledgeFeedType } from "@flora/types"
 import { knowledgeApi } from "@/lib/api"
 import { FeedCard } from "./feed-card"
 
@@ -36,11 +36,17 @@ export function ResearchPanel({
   docs, nodes, edges, selectedNode, gapTasks, workspaceId, onSelectNode,
 }: ResearchPanelProps) {
   const [tab, setTab] = useState<Tab>("feed")
+  const [pendingAsk, setPendingAsk] = useState<string | null>(null)
 
   // auto-switch to entity tab when a node is selected
   useEffect(() => {
     if (selectedNode) setTab("entity")
   }, [selectedNode?.id])
+
+  const askAbout = useCallback((q: string) => {
+    setPendingAsk(q)
+    setTab("ask")
+  }, [])
 
   return (
     <div
@@ -59,9 +65,9 @@ export function ResearchPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === "feed"     && <FeedTab docs={docs} />}
-        {tab === "ask"      && <AskTab workspaceId={workspaceId} onSelectNode={onSelectNode} />}
+        {tab === "ask"      && <AskTab workspaceId={workspaceId} onSelectNode={onSelectNode} initialQuestion={pendingAsk} onInitialConsumed={() => setPendingAsk(null)} />}
         {tab === "briefing" && <BriefingTab workspaceId={workspaceId} />}
-        {tab === "entity"   && <EntityTab node={selectedNode} edges={edges} nodes={nodes} />}
+        {tab === "entity"   && <EntityTab node={selectedNode} edges={edges} nodes={nodes} docs={docs} onAsk={askAbout} />}
         {tab === "gaps"     && <GapsTab gaps={gapTasks} />}
         {tab === "feeds"    && <FeedsTab workspaceId={workspaceId} />}
       </div>
@@ -86,7 +92,12 @@ interface AskMessage {
   sources?: Array<{ id: string; title: string; url: string | null; source_type: string; confidence_score: number }>
 }
 
-function AskTab({ workspaceId, onSelectNode }: { workspaceId?: string; onSelectNode?: (id: string) => void }) {
+function AskTab({ workspaceId, onSelectNode, initialQuestion, onInitialConsumed }: {
+  workspaceId?: string
+  onSelectNode?: (id: string) => void
+  initialQuestion?: string | null
+  onInitialConsumed?: () => void
+}) {
   const [messages, setMessages] = useState<AskMessage[]>([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
@@ -95,6 +106,24 @@ function AskTab({ workspaceId, onSelectNode }: { workspaceId?: string; onSelectN
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  // Auto-submit when a pending question arrives from another tab
+  useEffect(() => {
+    if (!initialQuestion || !workspaceId) return
+    setInput(initialQuestion)
+    onInitialConsumed?.()
+    // Submit after state update
+    const q = initialQuestion.trim()
+    if (!q) return
+    setMessages(m => [...m, { role: "user", content: q }])
+    setLoading(true)
+    knowledgeApi.ask(workspaceId, q).then(res => {
+      setMessages(m => [...m, { role: "assistant", content: res.answer, sources: res.sources }])
+    }).catch(() => {
+      setMessages(m => [...m, { role: "assistant", content: "Failed to get an answer." }])
+    }).finally(() => { setLoading(false); setInput("") })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuestion])
 
   async function submit() {
     const q = input.trim()
@@ -317,7 +346,15 @@ function BriefingTab({ workspaceId }: { workspaceId?: string }) {
 }
 
 // ── Entity detail tab ─────────────────────────────────────────────────────────
-function EntityTab({ node, edges, nodes }: { node: KGNode | null; edges: KGEdge[]; nodes: KGNode[] }) {
+function EntityTab({
+  node, edges, nodes, docs, onAsk,
+}: {
+  node: KGNode | null
+  edges: KGEdge[]
+  nodes: KGNode[]
+  docs: KnowledgeDocument[]
+  onAsk?: (q: string) => void
+}) {
   if (!node) return <Empty msg="Click a node in the graph to inspect it" />
 
   const color = entityColor(node.entityType)
@@ -326,16 +363,23 @@ function EntityTab({ node, edges, nodes }: { node: KGNode | null; edges: KGEdge[
   const outgoing = edges.filter(e => e.sourceId === node.id)
   const incoming = edges.filter(e => e.targetId === node.id)
 
+  // Docs that mention this entity (case-insensitive label match)
+  const labelLower = node.label.toLowerCase()
+  const linkedDocs = docs.filter(d =>
+    (d.entities as Array<{ name?: string }>).some(e => (e.name ?? "").toLowerCase() === labelLower)
+  ).slice(0, 8)
+
   return (
-    <div className="p-4 animate-atlas-slide-in">
-      <div className="mb-4 flex items-start gap-3">
+    <div className="p-4 animate-atlas-slide-in space-y-4">
+      {/* header */}
+      <div className="flex items-start gap-3">
         <div
           className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
           style={{ background: `${color}18`, border: `1px solid ${color}30` }}
         >
           <div className="h-3 w-3 rounded-full" style={{ background: color }} />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <h3 className="text-[13px] font-semibold capitalize" style={{ color: "var(--atlas-text)" }}>
             {node.label}
           </h3>
@@ -343,10 +387,21 @@ function EntityTab({ node, edges, nodes }: { node: KGNode | null; edges: KGEdge[
             {node.entityType} · {node.docCount} doc{node.docCount !== 1 ? "s" : ""}
           </p>
         </div>
+        {onAsk && (
+          <button
+            onClick={() => onAsk(`Tell me about ${node.label} based on recent news`)}
+            className="shrink-0 flex items-center gap-1 rounded border px-2 py-1 font-mono text-[9px] transition-colors hover:bg-white/5"
+            style={{ borderColor: "var(--atlas-border)", color: "var(--atlas-cyan)" }}
+            title="Ask Flora about this entity"
+          >
+            <MessageSquare className="h-2.5 w-2.5" /> Ask
+          </button>
+        )}
       </div>
 
+      {/* stats */}
       <div
-        className="mb-4 grid grid-cols-3 gap-px rounded-lg overflow-hidden border"
+        className="grid grid-cols-3 gap-px rounded-lg overflow-hidden border"
         style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-border)" }}
       >
         {[
@@ -361,11 +416,12 @@ function EntityTab({ node, edges, nodes }: { node: KGNode | null; edges: KGEdge[
         ))}
       </div>
 
+      {/* relationships */}
       {outgoing.length > 0 && (
-        <section className="mb-4">
+        <section>
           <SectionHead>Outgoing</SectionHead>
           <div className="space-y-1">
-            {outgoing.slice(0, 8).map(e => {
+            {outgoing.slice(0, 6).map(e => {
               const tgt = nodeById.get(e.targetId)
               return <RelRow key={e.id} label={e.relation} target={tgt?.label ?? "?"} targetType={tgt?.entityType ?? ""} weight={e.weight} />
             })}
@@ -374,10 +430,10 @@ function EntityTab({ node, edges, nodes }: { node: KGNode | null; edges: KGEdge[
       )}
 
       {incoming.length > 0 && (
-        <section className="mb-4">
+        <section>
           <SectionHead>Incoming</SectionHead>
           <div className="space-y-1">
-            {incoming.slice(0, 8).map(e => {
+            {incoming.slice(0, 6).map(e => {
               const src = nodeById.get(e.sourceId)
               return <RelRow key={e.id} label={e.relation} target={src?.label ?? "?"} targetType={src?.entityType ?? ""} weight={e.weight} incoming />
             })}
@@ -385,6 +441,37 @@ function EntityTab({ node, edges, nodes }: { node: KGNode | null; edges: KGEdge[
         </section>
       )}
 
+      {/* linked documents */}
+      {linkedDocs.length > 0 && (
+        <section>
+          <SectionHead>Source Documents ({linkedDocs.length})</SectionHead>
+          <div className="space-y-1.5">
+            {linkedDocs.map(doc => (
+              <a
+                key={doc.id}
+                href={doc.url ?? undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-2 rounded border p-2 text-[10px] transition-colors hover:bg-white/5 group"
+                style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-surface-2)", color: "var(--atlas-text)" }}
+              >
+                <span className="mt-0.5 shrink-0 font-mono" style={{ color }}>›</span>
+                <span className="flex-1 min-w-0">
+                  <span className="block truncate font-medium group-hover:underline">{doc.title}</span>
+                  {doc.summary && (
+                    <span className="mt-0.5 block line-clamp-2 leading-relaxed" style={{ color: "var(--atlas-text-3)" }}>
+                      {doc.summary.slice(0, 120)}
+                    </span>
+                  )}
+                </span>
+                {doc.url && <ExternalLink className="mt-0.5 h-2.5 w-2.5 shrink-0 opacity-0 group-hover:opacity-60" />}
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* timeline */}
       <section>
         <SectionHead>Timeline</SectionHead>
         <div className="space-y-1.5 font-mono text-[10px]" style={{ color: "var(--atlas-text-2)" }}>
@@ -437,33 +524,118 @@ function GapsTab({ gaps }: { gaps: Array<{ entity: string; gapType: string; desc
   )
 }
 
-// ── Feeds / Sources tab ────────────────────────────────────────────────────────
+// ── Feeds / Sources tab (S8 Feed Manager) ─────────────────────────────────────
+const SOURCE_COLOR: Record<string, string> = {
+  rss: "#58a6ff", arxiv: "#f85149", google_news: "#ffa657",
+  github_trending: "#3fb950", sec_edgar: "#58d9a8", youtube: "#f85149",
+  url: "#bc8cff", pdf: "#d29922", default: "#8b949e",
+}
+const FEED_TYPES = ["rss", "google_news", "arxiv", "github_trending", "sec_edgar", "url"] as const
+
 function FeedsTab({ workspaceId }: { workspaceId?: string }) {
   const [feeds, setFeeds] = useState<KnowledgeFeed[]>([])
   const [loading, setLoading] = useState(false)
-  const [toggling, setToggling] = useState<string | null>(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [newName, setNewName] = useState("")
+  const [newType, setNewType] = useState<KnowledgeFeedType>("rss")
+  const [newUrl, setNewUrl] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  useEffect(() => {
+  async function loadFeeds() {
     if (!workspaceId) return
     setLoading(true)
-    knowledgeApi.feeds(workspaceId).then(setFeeds).catch(() => {}).finally(() => setLoading(false))
-  }, [workspaceId])
+    try { setFeeds(await knowledgeApi.feeds(workspaceId)) } catch { /* ignore */ } finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadFeeds() }, [workspaceId])
+
+  async function addFeed() {
+    if (!workspaceId || !newName.trim()) return
+    setSaving(true)
+    try {
+      const config: Record<string, string> = {}
+      if (newUrl.trim()) config.url = newUrl.trim()
+      await knowledgeApi.addFeed(workspaceId, { name: newName.trim(), type: newType, config })
+      setNewName(""); setNewUrl(""); setShowAdd(false)
+      await loadFeeds()
+    } catch { /* ignore */ } finally { setSaving(false) }
+  }
+
+  async function deleteFeed(id: string) {
+    if (!workspaceId) return
+    setDeletingId(id)
+    try { await knowledgeApi.deleteFeed(workspaceId, id); await loadFeeds() } catch { /* ignore */ } finally { setDeletingId(null) }
+  }
 
   if (loading) return <LoadingSkeleton rows={8} />
 
-  const SOURCE_COLOR: Record<string, string> = {
-    rss: "#58a6ff", arxiv: "#f85149", google_news: "#ffa657",
-    github_trending: "#3fb950", sec_edgar: "#58d9a8", youtube: "#f85149",
-    url: "#bc8cff", pdf: "#d29922", default: "#8b949e",
-  }
-
   return (
     <div className="p-2 space-y-1.5">
+      {/* header */}
       <div className="flex items-center justify-between px-1 pb-1">
         <span className="font-mono text-[9px] font-bold uppercase tracking-widest" style={{ color: "var(--atlas-text-3)" }}>
           {feeds.filter(f => f.isActive).length} active · {feeds.length} total
         </span>
+        <button
+          onClick={() => setShowAdd(s => !s)}
+          className="flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[9px] transition-colors hover:bg-white/5"
+          style={{ borderColor: "var(--atlas-border)", color: "var(--atlas-cyan)" }}
+        >
+          <Plus className="h-2.5 w-2.5" /> Add
+        </button>
       </div>
+
+      {/* add feed form */}
+      {showAdd && (
+        <div
+          className="rounded-lg border p-3 space-y-2"
+          style={{ borderColor: "var(--atlas-border)", background: "var(--atlas-surface-2)" }}
+        >
+          <p className="font-mono text-[9px] font-bold uppercase tracking-wider" style={{ color: "var(--atlas-text-3)" }}>New Feed</p>
+          <select
+            value={newType}
+            onChange={e => setNewType(e.target.value as KnowledgeFeedType)}
+            className="w-full rounded border bg-transparent px-2 py-1 font-mono text-[10px] outline-none"
+            style={{ borderColor: "var(--atlas-border)", color: "var(--atlas-text)" }}
+          >
+            {FEED_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            placeholder="Feed name"
+            className="w-full rounded border bg-transparent px-2 py-1 text-[10px] outline-none focus:border-[#58a6ff]"
+            style={{ borderColor: "var(--atlas-border)", color: "var(--atlas-text)" }}
+          />
+          <input
+            value={newUrl}
+            onChange={e => setNewUrl(e.target.value)}
+            placeholder="URL (optional)"
+            className="w-full rounded border bg-transparent px-2 py-1 font-mono text-[9.5px] outline-none focus:border-[#58a6ff]"
+            style={{ borderColor: "var(--atlas-border)", color: "var(--atlas-text)" }}
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={addFeed}
+              disabled={saving || !newName.trim()}
+              className="flex-1 rounded px-2 py-1 font-mono text-[9px] font-bold transition-opacity disabled:opacity-40"
+              style={{ background: "var(--atlas-cyan)", color: "#07090f" }}
+            >
+              {saving ? "Adding…" : "Add Feed"}
+            </button>
+            <button
+              onClick={() => setShowAdd(false)}
+              className="rounded border px-2 py-1 font-mono text-[9px] hover:bg-white/5"
+              style={{ borderColor: "var(--atlas-border)", color: "var(--atlas-text-3)" }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* feed list */}
       {feeds.map(feed => {
         const color = SOURCE_COLOR[feed.type] ?? SOURCE_COLOR.default
         const lastRun = feed.lastCollectedAt
@@ -473,7 +645,7 @@ function FeedsTab({ workspaceId }: { workspaceId?: string }) {
         return (
           <div
             key={feed.id}
-            className="flex items-center gap-2 rounded border px-2.5 py-2 text-[10px]"
+            className="group flex items-center gap-2 rounded border px-2.5 py-2 text-[10px]"
             style={{
               borderColor: feed.isActive ? `${color}30` : "var(--atlas-border)",
               background: feed.isActive ? `${color}08` : "transparent",
@@ -493,10 +665,19 @@ function FeedsTab({ workspaceId }: { workspaceId?: string }) {
               style={{ background: feed.isActive ? "#3fb950" : "#8b949e" }}
               title={feed.isActive ? "Active" : "Paused"}
             />
+            <button
+              onClick={() => deleteFeed(feed.id)}
+              disabled={deletingId === feed.id}
+              className="shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity disabled:opacity-30"
+              style={{ color: "#f85149" }}
+              title="Delete feed"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
           </div>
         )
       })}
-      {feeds.length === 0 && <Empty msg="No feeds configured" />}
+      {feeds.length === 0 && !showAdd && <Empty msg="No feeds configured" sub="Click Add to create your first feed" />}
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { AtlasNav } from "@/components/atlas/atlas-nav"
 import { KnowledgeGraph } from "@/components/atlas/knowledge-graph"
 import { MetricBar } from "@/components/atlas/metric-bar"
 import { ResearchPanel } from "@/components/atlas/research-panel"
+import { ErrorBoundary } from "@/components/error-boundary"
 
 interface GapTask {
   entity:         string
@@ -281,26 +282,30 @@ export default function AtlasPage() {
           </div>
 
           <div className="absolute inset-0 top-9">
-            <KnowledgeGraph
-              nodes={nodes}
-              edges={edges}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              activeTypes={activeTypes}
-              searchQuery={graphSearch}
-            />
+            <ErrorBoundary>
+              <KnowledgeGraph
+                nodes={nodes}
+                edges={edges}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                activeTypes={activeTypes}
+                searchQuery={graphSearch}
+              />
+            </ErrorBoundary>
           </div>
         </div>
 
-        <ResearchPanel
-          docs={docs}
-          nodes={nodes}
-          edges={edges}
-          selectedNode={selectedNode}
-          gapTasks={gapTasks}
-          workspaceId={workspaceId ?? undefined}
-          onSelectNode={setSelectedId}
-        />
+        <ErrorBoundary>
+          <ResearchPanel
+            docs={docs}
+            nodes={nodes}
+            edges={edges}
+            selectedNode={selectedNode}
+            gapTasks={gapTasks}
+            workspaceId={workspaceId ?? undefined}
+            onSelectNode={setSelectedId}
+          />
+        </ErrorBoundary>
       </div>
     </div>
   )

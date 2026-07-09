@@ -20,6 +20,9 @@ from app.models.workspace import WorkspaceRole
 
 router = APIRouter()
 
+# Limit concurrent Ollama calls — prevents event-loop lockup under load
+_ollama_sem = asyncio.Semaphore(2)
+
 
 class AskRequest(BaseModel):
     question: str
@@ -699,12 +702,12 @@ async def ask_knowledge(
     try:
         from app.services.ai import get_provider
         provider = get_provider()
-        answer = await asyncio.wait_for(
-            provider.complete(system=SYSTEM, prompt=prompt),
-            timeout=45.0,
-        )
+        async with _ollama_sem:
+            answer = await asyncio.wait_for(
+                provider.complete(system=SYSTEM, prompt=prompt),
+                timeout=45.0,
+            )
     except asyncio.TimeoutError:
-        # Ollama is busy — return a raw summary instead of AI synthesis
         bullets = "\n".join(f"• [{i}] {d.title}: {(d.summary or '')[:120]}…" for i, d in enumerate(docs, 1))
         answer = f"(AI synthesis timed out — raw results below)\n\n{bullets}"
     except Exception as exc:

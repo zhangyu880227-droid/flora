@@ -135,10 +135,13 @@ export function KnowledgeGraph({ nodes, edges, selectedId, onSelect, activeTypes
 
   const onNodeMouseDown = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation()
-    const svg = svgRef.current!
+    const svg = svgRef.current
+    if (!svg) return
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return
     const pt = svg.createSVGPoint()
     pt.x = e.clientX; pt.y = e.clientY
-    const sp = pt.matrixTransform(svg.getScreenCTM()!.inverse())
+    const sp = pt.matrixTransform(ctm.inverse())
     const cur = positions.get(id) ?? { x: 0, y: 0 }
     dragging.current = { id, ox: sp.x - cur.x, oy: sp.y - cur.y }
   }, [positions])
@@ -150,18 +153,24 @@ export function KnowledgeGraph({ nodes, edges, selectedId, onSelect, activeTypes
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (dragging.current) {
-      const svg = svgRef.current!
+      const svg = svgRef.current
+      if (!svg) return
+      const ctm = svg.getScreenCTM()
+      if (!ctm) return
       const pt = svg.createSVGPoint()
       pt.x = e.clientX; pt.y = e.clientY
-      const sp = pt.matrixTransform(svg.getScreenCTM()!.inverse())
+      const sp = pt.matrixTransform(ctm.inverse())
+      // Capture ref values before setPos (ref may be cleared by onMouseUp before callback runs)
+      const { id, ox, oy } = dragging.current
       setPos(prev => {
         const next = new Map(prev)
-        next.set(dragging.current!.id, { x: sp.x - dragging.current!.ox, y: sp.y - dragging.current!.oy })
+        next.set(id, { x: sp.x - ox, y: sp.y - oy })
         return next
       })
     } else if (panOrigin.current) {
       const dx = e.clientX - panOrigin.current.mx, dy = e.clientY - panOrigin.current.my
-      setTrans(t => ({ ...t, x: panOrigin.current!.tx + dx, y: panOrigin.current!.ty + dy }))
+      const { tx, ty } = panOrigin.current
+      setTrans(t => ({ ...t, x: tx + dx, y: ty + dy }))
     }
   }, [])
 
@@ -221,14 +230,14 @@ export function KnowledgeGraph({ nodes, edges, selectedId, onSelect, activeTypes
                 strokeLinecap="round"
               />
               {/* edge label on hover */}
-              {(hoverEdge === e.id || isHighlighted) && (
+              {(hoverEdge === e.id || isHighlighted) && e.relation && (
                 <text
                   x={mx} y={my}
                   textAnchor="middle" dominantBaseline="middle"
                   fontSize="7.5" fill="#58a6ff" fontFamily="monospace"
                   style={{ pointerEvents: "none" }}
                 >
-                  {e.relation.replace(/_/g, " ")}
+                  {(e.relation as string).replace(/_/g, " ")}
                 </text>
               )}
             </g>
