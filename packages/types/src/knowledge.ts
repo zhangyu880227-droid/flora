@@ -33,6 +33,7 @@ export interface KnowledgeRelationship {
   from: string
   to: string
   relation: string
+  confidence?: number
 }
 
 export interface KnowledgeDocument {
