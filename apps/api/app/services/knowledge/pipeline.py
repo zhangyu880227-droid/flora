@@ -268,26 +268,30 @@ async def _process_item(
 
     content_hash = hashlib.sha256(clean.encode()).hexdigest()
 
-    # Dedup by hash
-    existing_hash = await db.execute(
-        select(KnowledgeDocument.id).where(
-            KnowledgeDocument.workspace_id == feed.workspace_id,
-            KnowledgeDocument.content_hash == content_hash,
-        )
-    )
-    if existing_hash.scalar():
-        return False
-
-    # Dedup by URL (if present)
-    if item.url:
-        existing_url = await db.execute(
+    # Run all dedup SELECTs with autoflush disabled.
+    # autoflush would try to INSERT any pending doc (from the previous loop
+    # iteration) before the SELECT runs, and if that doc has the same hash as
+    # an already-committed row, the INSERT fails and the session enters
+    # PendingRollbackError — killing every remaining feed in the run.
+    with db.no_autoflush:
+        existing_hash = await db.execute(
             select(KnowledgeDocument.id).where(
                 KnowledgeDocument.workspace_id == feed.workspace_id,
-                KnowledgeDocument.url == item.url,
+                KnowledgeDocument.content_hash == content_hash,
             )
         )
-        if existing_url.scalar():
+        if existing_hash.scalar():
             return False
+
+        if item.url:
+            existing_url = await db.execute(
+                select(KnowledgeDocument.id).where(
+                    KnowledgeDocument.workspace_id == feed.workspace_id,
+                    KnowledgeDocument.url == item.url,
+                )
+            )
+            if existing_url.scalar():
+                return False
 
     # AI extraction
     extraction = await extract_knowledge(item.title, clean)
@@ -326,6 +330,13 @@ async def _process_item(
         metadata_=item.metadata,
     )
     db.add(doc)
+    # Flush inside a savepoint so an unexpected IntegrityError on this single
+    # insert rolls back only the savepoint, not the whole session.
+    try:
+        async with db.begin_nested():
+            await db.flush()
+    except Exception:
+        return False
     return True
 
 
