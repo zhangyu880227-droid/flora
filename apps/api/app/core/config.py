@@ -5,10 +5,14 @@ from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Resolve paths relative to this file so the backend can be started from any cwd.
-# config.py lives at: apps/api/app/core/config.py
-# parents[4] walks up to the monorepo root (Flora/).
-_ROOT = Path(__file__).resolve().parents[4]
-_API_DIR = Path(__file__).resolve().parents[2]  # apps/api/
+# In the monorepo: apps/api/app/core/config.py → parents[4] = repo root (Flora/).
+# In Docker: /app/app/core/config.py → only 3 parents exist, so fall back to API dir.
+_config_path = Path(__file__).resolve()
+_API_DIR = _config_path.parents[2]  # apps/api/ in monorepo, /app in Docker
+try:
+    _ROOT = _config_path.parents[4]
+except IndexError:
+    _ROOT = _API_DIR
 
 # Load root .env first; apps/api/.env (if present) overrides for local dev.
 _ENV_FILES = [str(_ROOT / ".env"), str(_API_DIR / ".env")]
@@ -37,7 +41,7 @@ class Settings(BaseSettings):
     upload_dir: str = "/data/uploads"
 
     # CORS
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001", "http://192.168.31.36:4000", "http://192.168.31.36:3000"]
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -49,7 +53,7 @@ class Settings(BaseSettings):
                 return [v]
         return v
 
-    # LLM provider: "openai" (default) or "anthropic"
+    # LLM provider: "openai" | "anthropic" | "ollama"
     llm_provider: str = "openai"
 
     # OpenAI — default provider (Responses API)
@@ -59,6 +63,10 @@ class Settings(BaseSettings):
     # Anthropic — optional; set LLM_PROVIDER=anthropic + install anthropic package
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
+
+    # Ollama — local inference; set LLM_PROVIDER=ollama (no API key required)
+    ollama_host: str = "http://localhost:11434"
+    ollama_model: str = "qwen3:8b"
 
     # Embeddings — Voyage AI (required for ingestion and search; validated at call site)
     voyage_api_key: str = ""
@@ -71,6 +79,7 @@ class Settings(BaseSettings):
             raise ValueError("OPENAI_API_KEY must be set when LLM_PROVIDER=openai")
         if self.llm_provider == "anthropic" and not self.anthropic_api_key:
             raise ValueError("ANTHROPIC_API_KEY must be set when LLM_PROVIDER=anthropic")
+        # ollama requires no API key
         return self
 
 

@@ -1,3 +1,5 @@
+import uuid
+
 from pydantic import BaseModel
 
 from app.models.thread import MessageRole
@@ -8,10 +10,10 @@ class ThreadCreate(BaseModel):
 
 
 class ThreadResponse(BaseModel):
-    id: str
-    project_id: str
+    id: uuid.UUID
+    project_id: uuid.UUID
     title: str
-    created_by: str | None
+    created_by: uuid.UUID | None
     message_count: int = 0
 
     model_config = {"from_attributes": True}
@@ -30,8 +32,8 @@ class CitedSource(BaseModel):
 
 
 class MessageResponse(BaseModel):
-    id: str
-    thread_id: str
+    id: uuid.UUID
+    thread_id: uuid.UUID
     role: MessageRole
     content: str
     sources_cited: list[CitedSource]

@@ -31,8 +31,11 @@ def get_provider() -> LLMProvider:
             if not settings.anthropic_api_key:
                 raise ValueError("ANTHROPIC_API_KEY must be set when LLM_PROVIDER=anthropic")
             return AnthropicProvider(api_key=settings.anthropic_api_key, model=settings.anthropic_model)
+        case "ollama":
+            from app.services.providers.ollama_provider import OllamaProvider
+            return OllamaProvider(host=settings.ollama_host, model=settings.ollama_model)
         case _:
-            raise ValueError(f"Unknown LLM_PROVIDER: {settings.llm_provider!r}. Use 'openai' or 'anthropic'.")
+            raise ValueError(f"Unknown LLM_PROVIDER: {settings.llm_provider!r}. Use 'openai', 'anthropic', or 'ollama'.")
 
 
 def _build_context(results: list[SearchResult]) -> str:

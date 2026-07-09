@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   Bell,
@@ -38,6 +39,8 @@ export default function SettingsPage() {
   const user = useAuthStore((s) => s.user)
   const { activeWorkspaceId } = useWorkspaceStore()
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const { data: workspaces = [] } = useQuery({
     queryKey: ["workspaces"],
@@ -120,14 +123,14 @@ export default function SettingsPage() {
                 onClick={() => setTheme(value)}
                 className={cn(
                   "flex flex-col items-center gap-2 rounded-xl border p-4 text-sm font-medium transition-all",
-                  theme === value
+                  mounted && theme === value
                     ? "border-emerald-500/40 bg-emerald-500/8 text-emerald-700 dark:text-emerald-400"
                     : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground",
                 )}
               >
                 <Icon className="h-5 w-5" />
                 {label}
-                {theme === value && (
+                {mounted && theme === value && (
                   <Badge variant="secondary" className="text-[10px] font-normal px-1.5 h-4">
                     Active
                   </Badge>

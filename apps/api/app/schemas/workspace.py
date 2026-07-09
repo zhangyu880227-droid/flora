@@ -1,3 +1,5 @@
+import uuid
+
 from pydantic import BaseModel
 
 from app.models.workspace import WorkspaceRole
@@ -13,10 +15,10 @@ class WorkspaceUpdate(BaseModel):
 
 
 class WorkspaceResponse(BaseModel):
-    id: str
+    id: uuid.UUID
     name: str
     slug: str
-    owner_id: str
+    owner_id: uuid.UUID
 
     model_config = {"from_attributes": True}
 

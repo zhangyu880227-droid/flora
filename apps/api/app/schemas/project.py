@@ -1,3 +1,5 @@
+import uuid
+
 from pydantic import BaseModel
 
 
@@ -12,11 +14,11 @@ class ProjectUpdate(BaseModel):
 
 
 class ProjectResponse(BaseModel):
-    id: str
-    workspace_id: str
+    id: uuid.UUID
+    workspace_id: uuid.UUID
     name: str
     description: str | None
-    created_by: str | None
+    created_by: uuid.UUID | None
     source_count: int = 0
 
     model_config = {"from_attributes": True}

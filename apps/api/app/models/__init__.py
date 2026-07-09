@@ -6,6 +6,7 @@ from app.models.collection import Collection, CollectionSource
 from app.models.thread import Thread, Message
 from app.models.insight import Insight
 from app.models.tag import Tag, SourceTag
+from app.models.knowledge import KGEdge, KGNode, KnowledgeDocument, KnowledgeFeed, KnowledgeIngestionRun
 
 __all__ = [
     "User",
@@ -24,4 +25,9 @@ __all__ = [
     "Insight",
     "Tag",
     "SourceTag",
+    "KnowledgeFeed",
+    "KnowledgeDocument",
+    "KnowledgeIngestionRun",
+    "KGNode",
+    "KGEdge",
 ]

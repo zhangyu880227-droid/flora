@@ -13,9 +13,5 @@ services:
       - uploads:/data/uploads
 
   web:
-    command: pnpm dev
     volumes:
-      - ./apps/web:/app/apps/web
-      - ./packages:/app/packages
-      - /app/apps/web/node_modules
       - /app/apps/web/.next

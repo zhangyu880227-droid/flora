@@ -1,3 +1,5 @@
+import uuid
+
 from pydantic import BaseModel
 
 from app.models.source import SourceStatus, SourceType
@@ -10,15 +12,15 @@ class SourceCreate(BaseModel):
 
 
 class SourceResponse(BaseModel):
-    id: str
-    project_id: str
+    id: uuid.UUID
+    project_id: uuid.UUID
     type: SourceType
     title: str
     url: str | None
     file_path: str | None
     status: SourceStatus
     error_message: str | None
-    created_by: str | None
+    created_by: uuid.UUID | None
     chunk_count: int = 0
 
     model_config = {"from_attributes": True}
@@ -35,8 +37,8 @@ class CollectionUpdate(BaseModel):
 
 
 class CollectionResponse(BaseModel):
-    id: str
-    project_id: str
+    id: uuid.UUID
+    project_id: uuid.UUID
     name: str
     description: str | None
     source_count: int = 0

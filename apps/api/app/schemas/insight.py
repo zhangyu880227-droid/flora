@@ -1,3 +1,5 @@
+import uuid
+
 from pydantic import BaseModel
 
 
@@ -8,8 +10,8 @@ class InsightGenerateRequest(BaseModel):
 
 
 class InsightResponse(BaseModel):
-    id: str
-    project_id: str
+    id: uuid.UUID
+    project_id: uuid.UUID
     title: str
     content: str
     sources: list[dict]
