@@ -13,11 +13,12 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
+from app.core.config import settings
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse, WorkspaceInfo
 
 router = APIRouter()
 
-COOKIE_OPTS = dict(httponly=True, samesite="lax", secure=False)  # secure=True in prod
+COOKIE_OPTS = dict(httponly=True, samesite="lax", secure=(settings.environment == "production"))
 
 
 def _make_slug(name: str) -> str:

@@ -42,12 +42,21 @@ export default function SettingsPage() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  const { data: workspaces = [] } = useQuery({
+  const { data: workspaces = [], isError: workspacesError, error: workspacesErr } = useQuery({
     queryKey: ["workspaces"],
     queryFn: workspacesApi.list,
   })
 
   const activeWorkspace = workspaces.find((w) => w.id === (activeWorkspaceId ?? workspaces[0]?.id))
+
+  if (workspacesError) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 m-6">
+        <p className="text-sm font-medium text-destructive">Failed to load settings</p>
+        <p className="text-xs text-muted-foreground">{workspacesErr instanceof Error ? workspacesErr.message : "Unknown error"}</p>
+      </div>
+    )
+  }
 
   function initials(name?: string | null) {
     if (!name) return "?"

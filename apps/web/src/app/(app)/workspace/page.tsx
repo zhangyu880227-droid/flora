@@ -183,7 +183,7 @@ export default function WorkspacePage() {
   const { activeWorkspaceId } = useWorkspaceStore()
   const { tasks } = useTasksStore()
 
-  const { data: workspaces = [] } = useQuery({
+  const { data: workspaces = [], isError: wsError } = useQuery({
     queryKey: ["workspaces"],
     queryFn: workspacesApi.list,
   })
@@ -191,7 +191,7 @@ export default function WorkspacePage() {
   const workspaceId = activeWorkspaceId ?? workspaces[0]?.id
   const activeWorkspace = workspaces.find((w) => w.id === workspaceId) ?? workspaces[0]
 
-  const { data: projects = [], isLoading } = useQuery({
+  const { data: projects = [], isLoading, isError: projError, error: projErr } = useQuery({
     queryKey: ["projects", workspaceId],
     queryFn: () => projectsApi.list(workspaceId!),
     enabled: !!workspaceId,
@@ -208,6 +208,15 @@ export default function WorkspacePage() {
 
   const openTasks = tasks.filter((t) => t.status !== "done").length
   const totalSources = projects.reduce((s, p) => s + (p.sourceCount ?? 0), 0)
+
+  if (wsError || projError) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 m-6">
+        <p className="text-sm font-medium text-destructive">Failed to load workspace</p>
+        <p className="text-xs text-muted-foreground">{projErr instanceof Error ? projErr.message : "Check your connection and refresh"}</p>
+      </div>
+    )
+  }
 
   const quickActions = [
     {

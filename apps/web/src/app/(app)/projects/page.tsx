@@ -17,11 +17,20 @@ export default function ProjectsPage() {
 
   const workspaceId = activeWorkspaceId ?? workspaces[0]?.id
 
-  const { data: projects = [], isLoading } = useQuery({
+  const { data: projects = [], isLoading, isError, error } = useQuery({
     queryKey: ["projects", workspaceId],
     queryFn: () => projectsApi.list(workspaceId!),
     enabled: !!workspaceId,
   })
+
+  if (isError) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 m-6">
+        <p className="text-sm font-medium text-destructive">Failed to load projects</p>
+        <p className="text-xs text-muted-foreground">{error instanceof Error ? error.message : "Unknown error"}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6 pb-12">
