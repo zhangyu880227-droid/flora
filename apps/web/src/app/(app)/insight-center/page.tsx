@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useCallback } from "react"
+import { useState, useTransition } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   Activity,
@@ -20,7 +20,7 @@ import {
   Zap,
   Cpu,
 } from "lucide-react"
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, cn } from "@flora/ui"
+import { Button, cn } from "@flora/ui"
 import { knowledgeApi } from "@/lib/api"
 import { useWorkspaceStore } from "@/stores/workspace"
 import type { KnowledgeDocument, KnowledgeIngestionRun } from "@flora/types"

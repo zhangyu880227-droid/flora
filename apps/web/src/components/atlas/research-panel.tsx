@@ -29,11 +29,10 @@ interface ResearchPanelProps {
   selectedNode:  KGNode | null
   gapTasks:      Array<{ entity: string; gapType: string; description: string; suggestedQuery: string }>
   workspaceId?:  string
-  onSelectNode?: (id: string) => void
 }
 
 export function ResearchPanel({
-  docs, nodes, edges, selectedNode, gapTasks, workspaceId, onSelectNode,
+  docs, nodes, edges, selectedNode, gapTasks, workspaceId,
 }: ResearchPanelProps) {
   const [tab, setTab] = useState<Tab>("feed")
   const [pendingAsk, setPendingAsk] = useState<string | null>(null)
@@ -65,7 +64,7 @@ export function ResearchPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === "feed"     && <FeedTab docs={docs} />}
-        {tab === "ask"      && <AskTab workspaceId={workspaceId} onSelectNode={onSelectNode} initialQuestion={pendingAsk} onInitialConsumed={() => setPendingAsk(null)} />}
+        {tab === "ask"      && <AskTab workspaceId={workspaceId} initialQuestion={pendingAsk} onInitialConsumed={() => setPendingAsk(null)} />}
         {tab === "briefing" && <BriefingTab workspaceId={workspaceId} />}
         {tab === "entity"   && <EntityTab node={selectedNode} edges={edges} nodes={nodes} docs={docs} onAsk={askAbout} />}
         {tab === "gaps"     && <GapsTab gaps={gapTasks} />}
@@ -92,9 +91,8 @@ interface AskMessage {
   sources?: Array<{ id: string; title: string; url: string | null; source_type: string; confidence_score: number }>
 }
 
-function AskTab({ workspaceId, onSelectNode, initialQuestion, onInitialConsumed }: {
+function AskTab({ workspaceId, initialQuestion, onInitialConsumed }: {
   workspaceId?: string
-  onSelectNode?: (id: string) => void
   initialQuestion?: string | null
   onInitialConsumed?: () => void
 }) {

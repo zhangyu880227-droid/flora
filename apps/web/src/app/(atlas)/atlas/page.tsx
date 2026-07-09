@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Search } from "lucide-react"
 import type { KGEdge, KGNode, KnowledgeDocument, KnowledgeGraphStats, KnowledgeStats } from "@flora/types"
 import { knowledgeApi, knowledgeGraphApi } from "@/lib/api"
@@ -303,7 +303,6 @@ export default function AtlasPage() {
             selectedNode={selectedNode}
             gapTasks={gapTasks}
             workspaceId={workspaceId ?? undefined}
-            onSelectNode={setSelectedId}
           />
         </ErrorBoundary>
       </div>
