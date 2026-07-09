@@ -9,7 +9,9 @@ import {
   Building2,
   CheckSquare,
   ChevronLeft,
+  Cpu,
   FolderOpen,
+  Globe,
   LayoutDashboard,
   Lightbulb,
   LogOut,
@@ -35,10 +37,12 @@ import { useAuthStore } from "@/stores/auth"
 import { authApi } from "@/lib/api"
 
 const MAIN_NAV = [
-  { href: "/workspace", icon: LayoutDashboard, label: "Home" },
-  { href: "/agents",    icon: Bot,             label: "AI Agents" },
-  { href: "/knowledge", icon: BookOpen,        label: "Knowledge" },
-  { href: "/tasks",     icon: CheckSquare,     label: "Tasks" },
+  { href: "/insight-center", icon: Cpu,             label: "Insight Center" },
+  { href: "/workspace",      icon: LayoutDashboard,  label: "Home" },
+  { href: "/atlas",          icon: Globe,            label: "Atlas" },
+  { href: "/agents",         icon: Bot,              label: "AI Agents" },
+  { href: "/knowledge",      icon: BookOpen,         label: "Knowledge" },
+  { href: "/tasks",          icon: CheckSquare,      label: "Tasks" },
 ] as const
 
 const RESEARCH_NAV = [

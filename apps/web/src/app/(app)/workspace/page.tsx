@@ -8,6 +8,7 @@ import {
   Bot,
   CheckSquare,
   FolderOpen,
+  Globe,
   MessageSquare,
   Plus,
   Sparkles,
@@ -90,6 +91,16 @@ function WelcomeBanner({
               <Link href="/agents">
                 <Bot className="mr-1.5 h-3.5 w-3.5" />
                 AI Agents
+              </Link>
+            </Button>
+            <Button
+              size="sm"
+              className="border-0 bg-white/20 text-white backdrop-blur-sm hover:bg-white/30"
+              asChild
+            >
+              <Link href="/atlas">
+                <Globe className="mr-1.5 h-3.5 w-3.5" />
+                Atlas
               </Link>
             </Button>
           </div>
@@ -219,6 +230,13 @@ export default function WorkspacePage() {
       desc: "Browse all sources",
       href: "/knowledge",
       color: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+    },
+    {
+      icon: Globe,
+      label: "Atlas",
+      desc: "Knowledge graph & feeds",
+      href: "/atlas",
+      color: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
     },
     {
       icon: MessageSquare,

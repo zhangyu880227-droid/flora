@@ -99,11 +99,19 @@ export function AtlasNav({ graphStats, feedStats }: AtlasNavProps) {
           Atlas
         </span>
         <span
-          className="ml-auto rounded px-1.5 py-0.5 font-mono text-[9px] font-medium"
+          className="rounded px-1.5 py-0.5 font-mono text-[9px] font-medium"
           style={{ background: "#58a6ff15", color: "var(--atlas-cyan)", border: "1px solid #58a6ff30" }}
         >
           v1
         </span>
+        <Link
+          href="/workspace"
+          className="ml-auto font-mono text-[9px] opacity-40 hover:opacity-100 transition-opacity"
+          style={{ color: "var(--atlas-text-3)" }}
+          title="Back to app"
+        >
+          ← app
+        </Link>
       </div>
 
       {/* Stats strip */}
