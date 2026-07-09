@@ -12,7 +12,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (hasToken && (pathname === "/login" || pathname === "/register" || pathname === "/forgot-password")) {
-    return NextResponse.redirect(new URL("/workspace", request.url))
+    return NextResponse.redirect(new URL("/atlas", request.url))
   }
 
   return NextResponse.next()

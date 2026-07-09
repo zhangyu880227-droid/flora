@@ -98,6 +98,26 @@
   to   { opacity: 1; }
 }
 
+/* ── Atlas design tokens ── */
+:root {
+  --atlas-bg:         #07090f;
+  --atlas-surface:    #0d1117;
+  --atlas-surface-2:  #161b22;
+  --atlas-surface-3:  #1c2333;
+  --atlas-border:     #21262d;
+  --atlas-border-2:   #30363d;
+  --atlas-text:       #e6edf3;
+  --atlas-text-2:     #8b949e;
+  --atlas-text-3:     #484f58;
+  --atlas-cyan:       #58a6ff;
+  --atlas-green:      #3fb950;
+  --atlas-amber:      #d29922;
+  --atlas-red:        #f85149;
+  --atlas-purple:     #bc8cff;
+  --atlas-orange:     #ffa657;
+  --atlas-teal:       #39d353;
+}
+
 @layer utilities {
   .animate-fade-up {
     animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -120,6 +140,29 @@
   /* App shell sidebar token */
   .bg-sidebar { background-color: hsl(var(--sidebar)); }
   .border-sidebar { border-color: hsl(var(--sidebar-border)); }
+
+  /* Atlas utilities */
+  .atlas-bg       { background-color: var(--atlas-bg); }
+  .atlas-surface  { background-color: var(--atlas-surface); }
+  .atlas-border   { border-color: var(--atlas-border); }
+  .atlas-text     { color: var(--atlas-text); }
+  .atlas-muted    { color: var(--atlas-text-2); }
+
+  @keyframes atlas-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+  @keyframes atlas-node-enter {
+    from { opacity: 0; transform: scale(0); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes atlas-slide-in {
+    from { opacity: 0; transform: translateX(12px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .animate-atlas-pulse     { animation: atlas-pulse 2s ease-in-out infinite; }
+  .animate-atlas-node      { animation: atlas-node-enter 0.3s cubic-bezier(0.16,1,0.3,1) both; }
+  .animate-atlas-slide-in  { animation: atlas-slide-in 0.25s cubic-bezier(0.16,1,0.3,1) both; }
 
   .animate-auth-float {
     animation: auth-float 9s ease-in-out infinite;

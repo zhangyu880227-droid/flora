@@ -4,8 +4,20 @@ import type {
   CreateProjectRequest,
   CreateThreadRequest,
   CreateWorkspaceRequest,
+  EngineAtlas,
+  EngineFinding,
+  EngineHistoryEntry,
+  EngineStatus,
+  EngineTask,
   GenerateInsightRequest,
   Insight,
+  KGEdge,
+  KGNode,
+  KnowledgeDocument,
+  KnowledgeFeed,
+  KnowledgeGraphStats,
+  KnowledgeIngestionRun,
+  KnowledgeStats,
   LoginRequest,
   Message,
   Project,
@@ -110,4 +122,72 @@ export const insightsApi = {
   generate: (projectId: string, body: GenerateInsightRequest) =>
     api.post<Insight>(`/projects/${projectId}/insights/generate`, body),
   delete: (id: string) => api.delete(`/insights/${id}`),
+}
+
+// Engine
+export const engineApi = {
+  status: () => api.get<EngineStatus>("/engine/status"),
+  findings: () => api.get<EngineFinding[]>("/engine/findings"),
+  tasks: () => api.get<EngineTask[]>("/engine/tasks"),
+  atlas: () => api.get<EngineAtlas>("/engine/atlas"),
+  history: () => api.get<EngineHistoryEntry[]>("/engine/history"),
+  scan: () => api.post<{ scan_id: string; files_scanned: number; findings: number; duration_seconds: number }>("/engine/scan"),
+}
+
+// Knowledge Pipeline
+export const knowledgeApi = {
+  stats: (workspaceId: string) =>
+    api.get<KnowledgeStats>(`/workspaces/${workspaceId}/knowledge/stats`),
+  documents: (workspaceId: string, params?: { sourceType?: string; since?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams()
+    if (params?.sourceType) qs.set("source_type", params.sourceType)
+    if (params?.since) qs.set("since", params.since)
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit))
+    if (params?.offset !== undefined) qs.set("offset", String(params.offset))
+    const query = qs.toString()
+    return api.get<KnowledgeDocument[]>(`/workspaces/${workspaceId}/knowledge/documents${query ? `?${query}` : ""}`)
+  },
+  document: (workspaceId: string, docId: string) =>
+    api.get<KnowledgeDocument>(`/workspaces/${workspaceId}/knowledge/documents/${docId}`),
+  feeds: (workspaceId: string) =>
+    api.get<KnowledgeFeed[]>(`/workspaces/${workspaceId}/knowledge/feeds`),
+  addFeed: (workspaceId: string, body: Partial<KnowledgeFeed>) =>
+    api.post<KnowledgeFeed>(`/workspaces/${workspaceId}/knowledge/feeds`, body),
+  deleteFeed: (workspaceId: string, feedId: string) =>
+    api.delete(`/workspaces/${workspaceId}/knowledge/feeds/${feedId}`),
+  collect: (workspaceId: string, feedId?: string) =>
+    feedId
+      ? api.post(`/workspaces/${workspaceId}/knowledge/feeds/${feedId}/collect`)
+      : api.post(`/workspaces/${workspaceId}/knowledge/collect`),
+  reprocess: (workspaceId: string) =>
+    api.post(`/workspaces/${workspaceId}/knowledge/reprocess`),
+  runs: (workspaceId: string) =>
+    api.get<KnowledgeIngestionRun[]>(`/workspaces/${workspaceId}/knowledge/runs`),
+  triggerLoop: (workspaceId: string) =>
+    api.post(`/workspaces/${workspaceId}/knowledge/loop`),
+  gaps: (workspaceId: string, limit = 20) =>
+    api.get<Array<{ entity: string; gapType: string; description: string; suggestedQuery: string; priority: number }>>(
+      `/workspaces/${workspaceId}/knowledge/gaps?limit=${limit}`
+    ),
+}
+
+// Knowledge Graph
+export const knowledgeGraphApi = {
+  nodes: (workspaceId: string, params?: { entityType?: string; minDocCount?: number; limit?: number }) => {
+    const qs = new URLSearchParams()
+    if (params?.entityType) qs.set("entity_type", params.entityType)
+    if (params?.minDocCount !== undefined) qs.set("min_doc_count", String(params.minDocCount))
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit))
+    const query = qs.toString()
+    return api.get<KGNode[]>(`/workspaces/${workspaceId}/knowledge/graph/nodes${query ? `?${query}` : ""}`)
+  },
+  edges: (workspaceId: string, params?: { nodeId?: string; limit?: number }) => {
+    const qs = new URLSearchParams()
+    if (params?.nodeId) qs.set("node_id", params.nodeId)
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit))
+    const query = qs.toString()
+    return api.get<KGEdge[]>(`/workspaces/${workspaceId}/knowledge/graph/edges${query ? `?${query}` : ""}`)
+  },
+  stats: (workspaceId: string) =>
+    api.get<KnowledgeGraphStats>(`/workspaces/${workspaceId}/knowledge/graph/stats`),
 }
