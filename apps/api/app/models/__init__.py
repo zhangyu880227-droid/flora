@@ -7,6 +7,7 @@ from app.models.thread import Thread, Message
 from app.models.insight import Insight
 from app.models.tag import Tag, SourceTag
 from app.models.knowledge import KGEdge, KGNode, KnowledgeDocument, KnowledgeFeed, KnowledgeIngestionRun
+from app.models.task import Task, TaskStatus, TaskPriority
 
 __all__ = [
     "User",
@@ -30,4 +31,7 @@ __all__ = [
     "KnowledgeIngestionRun",
     "KGNode",
     "KGEdge",
+    "Task",
+    "TaskStatus",
+    "TaskPriority",
 ]
