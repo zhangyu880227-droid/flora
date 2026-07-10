@@ -4,6 +4,7 @@ from app.repositories.user import UserRepository
 from app.repositories.workspace import WorkspaceRepository
 from app.repositories.project import ProjectRepository
 from app.repositories.task import TaskRepository
+from app.repositories.memory import MemoryRepository
 
 __all__ = [
     "BaseRepository",
@@ -11,4 +12,5 @@ __all__ = [
     "WorkspaceRepository",
     "ProjectRepository",
     "TaskRepository",
+    "MemoryRepository",
 ]

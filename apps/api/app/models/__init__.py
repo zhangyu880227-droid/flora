@@ -8,6 +8,7 @@ from app.models.insight import Insight
 from app.models.tag import Tag, SourceTag
 from app.models.knowledge import KGEdge, KGNode, KnowledgeDocument, KnowledgeFeed, KnowledgeIngestionRun
 from app.models.task import Task, TaskStatus, TaskPriority
+from app.models.memory import Memory, MemoryType
 
 __all__ = [
     "User",
@@ -34,4 +35,6 @@ __all__ = [
     "Task",
     "TaskStatus",
     "TaskPriority",
+    "Memory",
+    "MemoryType",
 ]
