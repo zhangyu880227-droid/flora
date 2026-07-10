@@ -11,6 +11,7 @@ celery_app = Celery(
         "app.tasks.ingestion",
         "app.tasks.engine_task",
         "app.tasks.knowledge_tasks",
+        "app.tasks.memory_tasks",
     ],
 )
 
@@ -36,6 +37,12 @@ celery_app.conf.update(
             "task": "app.tasks.knowledge_tasks.run_self_improvement_loop",
             "schedule": schedule(run_every=1800),
             "options": {"expires": 1700},
+        },
+        # Memory Engine: consolidate + prune + tag every 2 hours
+        "flora-memory-engine": {
+            "task": "app.tasks.memory_tasks.run_memory_engine",
+            "schedule": schedule(run_every=7200),
+            "options": {"expires": 7100},
         },
     },
 )
