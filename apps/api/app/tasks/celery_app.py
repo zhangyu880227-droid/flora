@@ -12,6 +12,7 @@ celery_app = Celery(
         "app.tasks.engine_task",
         "app.tasks.knowledge_tasks",
         "app.tasks.memory_tasks",
+        "app.tasks.agent_tasks",
     ],
 )
 
