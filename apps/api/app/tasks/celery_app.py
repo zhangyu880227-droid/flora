@@ -13,6 +13,7 @@ celery_app = Celery(
         "app.tasks.knowledge_tasks",
         "app.tasks.memory_tasks",
         "app.tasks.agent_tasks",
+        "app.tasks.learning_tasks",
     ],
 )
 
@@ -44,6 +45,12 @@ celery_app.conf.update(
             "task": "app.tasks.memory_tasks.run_memory_engine",
             "schedule": schedule(run_every=7200),
             "options": {"expires": 7100},
+        },
+        # Automatic Learning: scan docs → memory + KG every hour
+        "flora-auto-learning": {
+            "task": "flora.learning.run",
+            "schedule": schedule(run_every=3600),
+            "options": {"expires": 3500},
         },
     },
 )
