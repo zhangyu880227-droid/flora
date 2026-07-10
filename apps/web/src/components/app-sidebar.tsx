@@ -4,19 +4,18 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
-  BookOpen,
   Bot,
   Building2,
   CheckSquare,
   ChevronLeft,
-  Cpu,
   FolderOpen,
-  Globe,
   LayoutDashboard,
   Lightbulb,
   LogOut,
   MessageSquare,
+  Network,
   PanelLeft,
+  Rss,
   Search,
   Settings,
 } from "lucide-react"
@@ -37,22 +36,24 @@ import { useAuthStore } from "@/stores/auth"
 import { authApi } from "@/lib/api"
 
 const MAIN_NAV = [
-  { href: "/insight-center", icon: Cpu,             label: "Insight Center" },
-  { href: "/workspace",      icon: LayoutDashboard,  label: "Home" },
-  { href: "/atlas",          icon: Globe,            label: "Atlas" },
-  { href: "/agents",         icon: Bot,              label: "AI Agents" },
-  { href: "/knowledge",      icon: BookOpen,         label: "Knowledge" },
-  { href: "/tasks",          icon: CheckSquare,      label: "Tasks" },
+  { href: "/workspace",  icon: LayoutDashboard, label: "Home" },
+  { href: "/knowledge",  icon: Rss,             label: "Knowledge" },
+  { href: "/threads",    icon: MessageSquare,   label: "Threads" },
 ] as const
 
 const RESEARCH_NAV = [
-  { href: "/projects",  icon: FolderOpen,    label: "Projects" },
-  { href: "/threads",   icon: MessageSquare, label: "Threads" },
-  { href: "/search",    icon: Search,        label: "Search" },
-  { href: "/insights",  icon: Lightbulb,     label: "Insights" },
+  { href: "/projects",  icon: FolderOpen,  label: "Projects" },
+  { href: "/insights",  icon: Lightbulb,   label: "Insights" },
+] as const
+
+const AUTOMATION_NAV = [
+  { href: "/agents",  icon: Bot,         label: "Agents" },
+  { href: "/tasks",   icon: CheckSquare, label: "Tasks" },
 ] as const
 
 const BOTTOM_NAV = [
+  { href: "/search",     icon: Search,   label: "Search" },
+  { href: "/atlas",      icon: Network,  label: "Knowledge Graph" },
   { href: "/workspaces", icon: Building2, label: "Workspace" },
   { href: "/settings",   icon: Settings,  label: "Settings" },
 ] as const
@@ -196,6 +197,18 @@ export function AppSidebar() {
 
             <NavSection label="Research" collapsed={collapsed} />
             {RESEARCH_NAV.map(({ href, icon, label }) => (
+              <NavItem
+                key={href}
+                href={href}
+                icon={icon}
+                label={label}
+                active={isActive(href)}
+                collapsed={collapsed}
+              />
+            ))}
+
+            <NavSection label="Automation" collapsed={collapsed} />
+            {AUTOMATION_NAV.map(({ href, icon, label }) => (
               <NavItem
                 key={href}
                 href={href}
