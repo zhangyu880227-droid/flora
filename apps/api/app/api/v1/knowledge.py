@@ -912,3 +912,107 @@ async def intelligence_briefing(
         "node_count": node_count,
         "recent_doc_count": len(recent_docs),
     }
+
+
+# ── Knowledge Graph — Phase 5 extensions ─────────────────────────────────────
+
+class MergeNodesRequest(BaseModel):
+    source_node_ids: list[str]
+    target_label: str
+    entity_type: str = "concept"
+
+
+class LinkMemoryRequest(BaseModel):
+    memory_id: str
+    entity_labels: list[str]
+    entity_type: str = "concept"
+
+
+@router.get("/workspaces/{workspace_id}/knowledge/graph/search")
+async def search_graph_nodes(
+    workspace_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DB,
+    q: str = Query(..., min_length=1),
+    entity_type: str | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+) -> list[dict]:
+    """Search KG nodes by label (case-insensitive substring)."""
+    await require_workspace_member(workspace_id, current_user, db)
+    from app.services.knowledge.kg_service import KGService
+    svc = KGService(db)
+    nodes = await svc.search_nodes(workspace_id, q, entity_type=entity_type, limit=limit)
+    return [_node_to_dict(n) for n in nodes]
+
+
+@router.get("/workspaces/{workspace_id}/knowledge/graph/nodes/{node_id}/neighbors")
+async def get_node_neighbors(
+    workspace_id: uuid.UUID,
+    node_id: uuid.UUID,
+    current_user: CurrentUser,
+    db: DB,
+    hops: int = Query(1, ge=1, le=2),
+    max_nodes: int = Query(50, ge=1, le=200),
+) -> dict:
+    """Return the 1- or 2-hop neighborhood subgraph for graph visualization."""
+    await require_workspace_member(workspace_id, current_user, db)
+    from app.services.knowledge.kg_service import KGService
+    svc = KGService(db)
+    subgraph = await svc.get_neighbors(workspace_id, node_id, hops=hops, max_nodes=max_nodes)
+    return {
+        "node_id": str(node_id),
+        "hops": hops,
+        "nodes": [_node_to_dict(n) for n in subgraph["nodes"]],
+        "edges": [_edge_to_dict(e) for e in subgraph["edges"]],
+    }
+
+
+@router.post("/workspaces/{workspace_id}/knowledge/graph/merge")
+async def merge_graph_nodes(
+    workspace_id: uuid.UUID,
+    body: MergeNodesRequest,
+    current_user: CurrentUser,
+    db: DB,
+) -> dict:
+    """Merge duplicate entity nodes into a single canonical node."""
+    await require_workspace_member(workspace_id, current_user, db, minimum_role=WorkspaceRole.editor)
+    from app.services.knowledge.kg_service import KGService
+    svc = KGService(db)
+    try:
+        merged = await svc.merge_nodes(
+            workspace_id,
+            [uuid.UUID(nid) for nid in body.source_node_ids],
+            body.target_label,
+            body.entity_type,
+        )
+        await db.commit()
+        return _node_to_dict(merged)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/workspaces/{workspace_id}/knowledge/graph/link-memory")
+async def link_memory_to_kg(
+    workspace_id: uuid.UUID,
+    body: LinkMemoryRequest,
+    current_user: CurrentUser,
+    db: DB,
+) -> dict:
+    """Link a Memory record to KG entities (upserts nodes + updates memory.meta)."""
+    await require_workspace_member(workspace_id, current_user, db)
+    from app.models.memory import Memory
+    from app.services.knowledge.kg_service import KGService
+
+    memory = await db.get(Memory, uuid.UUID(body.memory_id))
+    if not memory or memory.workspace_id != workspace_id:
+        raise HTTPException(status_code=404, detail="Memory not found")
+
+    svc = KGService(db)
+    nodes = await svc.link_memory_entities(
+        workspace_id, memory, body.entity_labels, body.entity_type
+    )
+    await db.commit()
+    return {
+        "memory_id": body.memory_id,
+        "linked_nodes": [_node_to_dict(n) for n in nodes],
+    }
