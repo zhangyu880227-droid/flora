@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
+  Activity,
   Bot,
   Building2,
   CheckSquare,
@@ -37,6 +38,7 @@ import { authApi } from "@/lib/api"
 
 const MAIN_NAV = [
   { href: "/workspace",  icon: LayoutDashboard, label: "Home" },
+  { href: "/dashboard",  icon: Activity,         label: "Dashboard" },
   { href: "/knowledge",  icon: Rss,             label: "Knowledge" },
   { href: "/threads",    icon: MessageSquare,   label: "Threads" },
 ] as const

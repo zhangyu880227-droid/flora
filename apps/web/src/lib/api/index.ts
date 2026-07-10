@@ -1,4 +1,5 @@
 import type {
+  AgentJob,
   Collection,
   CreateCollectionRequest,
   CreateMemoryRequest,
@@ -8,6 +9,7 @@ import type {
   CreateWorkspaceRequest,
   EngineAtlas,
   EngineFinding,
+  EngineHealthDashboard,
   EngineHistoryEntry,
   EngineStatus,
   EngineTask,
@@ -20,6 +22,8 @@ import type {
   KnowledgeGraphStats,
   KnowledgeIngestionRun,
   KnowledgeStats,
+  LearningJob,
+  LearningStats,
   LoginRequest,
   Memory,
   MemoryType,
@@ -29,6 +33,9 @@ import type {
   SearchRequest,
   SearchResponse,
   Source,
+  StockHolding,
+  StockReport,
+  StockWatchlist,
   Task,
   TaskStatus,
   Thread,
@@ -213,6 +220,49 @@ export const tasksApi = {
     api.patch<Envelope<Task>>(`/workspaces/${workspaceId}/tasks/${taskId}`, body).then((r) => r.data),
   delete: (workspaceId: string, taskId: string) =>
     api.delete<Envelope<{ deleted: boolean }>>(`/workspaces/${workspaceId}/tasks/${taskId}`).then((r) => r.data),
+}
+
+// Memories
+export const memoriesApi = {
+  stats: (workspaceId: string) =>
+    api.get<Envelope<{ total: number; by_type: Record<string, number> }>>(`/workspaces/${workspaceId}/memories/stats`).then((r) => r.data),
+}
+
+// Agents
+export const agentsApi = {
+  listJobs: (workspaceId: string, params?: { status?: string; page?: number; pageSize?: number }) => {
+    const qs = new URLSearchParams()
+    if (params?.status) qs.set("status", params.status)
+    if (params?.page !== undefined) qs.set("page", String(params.page))
+    if (params?.pageSize !== undefined) qs.set("page_size", String(params.pageSize))
+    const query = qs.toString()
+    return api.get<Envelope<AgentJob[]>>(`/workspaces/${workspaceId}/agents/jobs${query ? `?${query}` : ""}`).then((r) => r.data)
+  },
+}
+
+// Learning
+export const learningApi = {
+  stats: (workspaceId: string) =>
+    api.get<Envelope<LearningStats>>(`/workspaces/${workspaceId}/learning/stats`).then((r) => r.data),
+  jobs: (workspaceId: string, limit = 10) =>
+    api.get<Envelope<LearningJob[]>>(`/workspaces/${workspaceId}/learning/jobs?limit=${limit}`).then((r) => r.data),
+  run: (workspaceId: string) =>
+    api.post<Envelope<{ task_id: string; status: string }>>(`/workspaces/${workspaceId}/learning/run`).then((r) => r.data),
+}
+
+// Stocks
+export const stocksApi = {
+  reports: (workspaceId: string, limit = 5) =>
+    api.get<Envelope<StockReport[]>>(`/workspaces/${workspaceId}/stocks/reports?limit=${limit}`).then((r) => r.data),
+  watchlists: (workspaceId: string) =>
+    api.get<Envelope<StockWatchlist[]>>(`/workspaces/${workspaceId}/stocks/watchlists`).then((r) => r.data),
+  holdings: (workspaceId: string) =>
+    api.get<Envelope<StockHolding[]>>(`/workspaces/${workspaceId}/stocks/holdings`).then((r) => r.data),
+}
+
+// Engine health
+export const engineHealthApi = {
+  health: () => api.get<EngineHealthDashboard>("/engine/health"),
 }
 
 // Knowledge Graph
