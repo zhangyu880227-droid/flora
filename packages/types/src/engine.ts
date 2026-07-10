@@ -74,6 +74,20 @@ export interface EngineAtlas {
   opportunities: EngineOpportunity[]
 }
 
+export interface EngineHealthDashboard {
+  health_score: number
+  health_trend: Array<{ scan: string; score: number }>
+  total_findings: number
+  by_severity: Record<string, number>
+  by_category: Record<string, number>
+  top_issues: EngineFinding[]
+  recommended_tasks: EngineTask[]
+  coverage_gaps: Array<{ module: string; missing_test: string }>
+  priority_opportunities: EngineOpportunity[]
+  last_scan: string | null
+  scan_count: number
+}
+
 export interface EngineHistoryEntry {
   timestamp: string
   scanId: string
