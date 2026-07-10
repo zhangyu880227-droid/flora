@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
+    # Cache backend: "memory" (default) | "redis"
+    cache_backend: str = "memory"
+
+    # Logging
+    log_level: str = "INFO"
+
     # Storage
     upload_dir: str = "/data/uploads"
 
