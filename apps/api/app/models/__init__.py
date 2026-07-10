@@ -9,6 +9,7 @@ from app.models.tag import Tag, SourceTag
 from app.models.knowledge import KGEdge, KGNode, KnowledgeDocument, KnowledgeFeed, KnowledgeIngestionRun
 from app.models.task import Task, TaskStatus, TaskPriority
 from app.models.memory import Memory, MemoryType
+from app.models.agent import AgentJob, AgentExecution, AgentJobStatus, AgentExecutionStatus
 
 __all__ = [
     "User",
@@ -37,4 +38,8 @@ __all__ = [
     "TaskPriority",
     "Memory",
     "MemoryType",
+    "AgentJob",
+    "AgentExecution",
+    "AgentJobStatus",
+    "AgentExecutionStatus",
 ]
