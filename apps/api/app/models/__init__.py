@@ -10,6 +10,7 @@ from app.models.knowledge import KGEdge, KGNode, KnowledgeDocument, KnowledgeFee
 from app.models.task import Task, TaskStatus, TaskPriority
 from app.models.memory import Memory, MemoryType
 from app.models.agent import AgentJob, AgentExecution, AgentJobStatus, AgentExecutionStatus
+from app.models.stock import StockWatchlist, StockWatchlistItem, StockHolding, StockAnalysis, DailyReport
 
 __all__ = [
     "User",
@@ -42,4 +43,9 @@ __all__ = [
     "AgentExecution",
     "AgentJobStatus",
     "AgentExecutionStatus",
+    "StockWatchlist",
+    "StockWatchlistItem",
+    "StockHolding",
+    "StockAnalysis",
+    "DailyReport",
 ]
