@@ -150,6 +150,63 @@ async def engine_changelog(current_user: CurrentUser) -> JSONResponse:
     return JSONResponse(changelog[:50])
 
 
+@router.get("/health")
+async def engine_health(current_user: CurrentUser) -> JSONResponse:
+    """Unified Health Dashboard payload: score, trends, top issues, recommendations, coverage gaps."""
+    flora = _flora_dir()
+    atlas = _read_json(flora / "atlas.json") or {}
+    tasks_data = _read_json(flora / "tasks.json") or {}
+    tasks = tasks_data.get("tasks", []) if isinstance(tasks_data, dict) else []
+
+    metrics = atlas.get("current_metrics", {})
+    history = atlas.get("metrics_history", [])
+    by_sev = metrics.get("by_severity", {})
+
+    health = _health_score(by_sev)
+
+    # Trend: last 5 scans
+    trend = [
+        {"scan": h.get("scan_id", ""), "score": _health_score(h.get("by_severity", {}))}
+        for h in history[-5:]
+    ]
+
+    # Top 5 unresolved critical/high findings
+    all_findings = [f for f in atlas.get("findings", []) if not f.get("resolved")]
+    top_issues = [
+        f for f in all_findings
+        if f.get("severity") in ("critical", "high")
+    ][:5]
+
+    # Top 5 ranked pending tasks
+    pending_tasks = sorted(
+        [t for t in tasks if t.get("status") == "pending" and t.get("score", 0) > 0],
+        key=lambda t: -t.get("score", 0),
+    )[:5]
+
+    # Coverage gaps
+    coverage_gaps = atlas.get("coverage_gaps", [])[:10]
+
+    # Opportunities (phase=now, impact=high)
+    opps = [
+        o for o in atlas.get("opportunities", [])
+        if o.get("phase") == "now" and o.get("impact") == "high"
+    ][:3]
+
+    return JSONResponse({
+        "health_score": health,
+        "health_trend": trend,
+        "total_findings": metrics.get("total_findings", 0),
+        "by_severity": by_sev,
+        "by_category": metrics.get("by_category", {}),
+        "top_issues": top_issues,
+        "recommended_tasks": pending_tasks,
+        "coverage_gaps": coverage_gaps,
+        "priority_opportunities": opps,
+        "last_scan": atlas.get("last_scan"),
+        "scan_count": atlas.get("scan_count", 0),
+    })
+
+
 @router.post("/scan")
 async def trigger_scan(current_user: CurrentUser) -> JSONResponse:
     """Trigger a synchronous engine scan and return results."""

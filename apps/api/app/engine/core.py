@@ -16,9 +16,11 @@ from .analyzers.python_analyzer import PythonAnalyzer
 from .analyzers.typescript_analyzer import TypeScriptAnalyzer
 from .analyzers.architecture_analyzer import ArchitectureAnalyzer
 from .analyzers.git_analyzer import GitAnalyzer
+from .analyzers.performance_analyzer import PerformanceAnalyzer
 from .generators.task_ranker import generate_tasks
 from .generators.atlas_updater import AtlasUpdater
 from .generators.status_reporter import StatusReporter
+from .generators.test_generator import TestGenerator
 from .detectors.opportunity_detector import OpportunityDetector
 from .fixers.applier import FixApplier
 from .roadmap import generate_roadmap
@@ -45,9 +47,11 @@ class SelfImprovementEngine:
             TypeScriptAnalyzer(self.project_root),
             ArchitectureAnalyzer(self.project_root),
             GitAnalyzer(self.project_root),
+            PerformanceAnalyzer(self.project_root),
         ]
         self.atlas = AtlasUpdater(self.project_root, self.flora_dir)
         self.reporter = StatusReporter(self.project_root)
+        self.test_generator = TestGenerator(self.project_root)
         self.opportunity_detector = OpportunityDetector(self.project_root)
         self.fixer = FixApplier(self.project_root, self.flora_dir)
 
@@ -173,6 +177,11 @@ class SelfImprovementEngine:
         ]
 
         self.reporter.generate(findings, all_tasks, atlas_data)
+
+        # ── Step 7b: generate test skeletons for uncovered modules ───────────
+        coverage_gaps = self.test_generator.coverage_gaps()
+        atlas_data["coverage_gaps"] = coverage_gaps[:50]
+        logger.info("[engine] %d uncovered modules detected", len(coverage_gaps))
 
         # ── Step 8: generate roadmap ──────────────────────────────────────────
         import json as _json
