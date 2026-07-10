@@ -1,7 +1,9 @@
 import type {
   Collection,
   CreateCollectionRequest,
+  CreateMemoryRequest,
   CreateProjectRequest,
+  CreateTaskRequest,
   CreateThreadRequest,
   CreateWorkspaceRequest,
   EngineAtlas,
@@ -19,14 +21,20 @@ import type {
   KnowledgeIngestionRun,
   KnowledgeStats,
   LoginRequest,
+  Memory,
+  MemoryType,
   Message,
   Project,
   RegisterRequest,
   SearchRequest,
   SearchResponse,
   Source,
+  Task,
+  TaskStatus,
   Thread,
+  UpdateMemoryRequest,
   UpdateProjectRequest,
+  UpdateTaskRequest,
   UpdateWorkspaceRequest,
   User,
   Workspace,
@@ -182,6 +190,29 @@ export const knowledgeApi = {
     api.get<{ briefing: string; generatedAt: string; docCount: number; nodeCount: number; recentDocCount: number }>(
       `/workspaces/${workspaceId}/knowledge/briefing`
     ),
+}
+
+// Tasks (envelope-wrapped responses: {ok, data, error, meta})
+type Envelope<T> = { ok: boolean; data: T; error: { code: string; message: string } | null; meta: { total: number; page: number; pageSize: number; pages: number } | null }
+
+export const tasksApi = {
+  list: (workspaceId: string, params?: { status?: TaskStatus; projectId?: string; page?: number; pageSize?: number }) => {
+    const qs = new URLSearchParams()
+    if (params?.status) qs.set("status", params.status)
+    if (params?.projectId) qs.set("project_id", params.projectId)
+    if (params?.page !== undefined) qs.set("page", String(params.page))
+    if (params?.pageSize !== undefined) qs.set("page_size", String(params.pageSize))
+    const query = qs.toString()
+    return api.get<Envelope<Task[]>>(`/workspaces/${workspaceId}/tasks${query ? `?${query}` : ""}`).then((r) => r.data)
+  },
+  create: (workspaceId: string, body: CreateTaskRequest) =>
+    api.post<Envelope<Task>>(`/workspaces/${workspaceId}/tasks`, body).then((r) => r.data),
+  get: (workspaceId: string, taskId: string) =>
+    api.get<Envelope<Task>>(`/workspaces/${workspaceId}/tasks/${taskId}`).then((r) => r.data),
+  update: (workspaceId: string, taskId: string, body: UpdateTaskRequest) =>
+    api.patch<Envelope<Task>>(`/workspaces/${workspaceId}/tasks/${taskId}`, body).then((r) => r.data),
+  delete: (workspaceId: string, taskId: string) =>
+    api.delete<Envelope<{ deleted: boolean }>>(`/workspaces/${workspaceId}/tasks/${taskId}`).then((r) => r.data),
 }
 
 // Knowledge Graph

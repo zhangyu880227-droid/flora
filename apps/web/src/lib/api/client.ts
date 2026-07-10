@@ -76,6 +76,13 @@ export const api = {
       body: body !== undefined ? JSON.stringify(transformKeys(body, camelToSnake)) : undefined,
     }),
 
+  patch: <T>(path: string, body?: unknown, init?: RequestInit) =>
+    request<T>(path, {
+      ...init,
+      method: "PATCH",
+      body: body !== undefined ? JSON.stringify(transformKeys(body, camelToSnake)) : undefined,
+    }),
+
   delete: <T>(path: string, init?: RequestInit) =>
     request<T>(path, { ...init, method: "DELETE" }),
 

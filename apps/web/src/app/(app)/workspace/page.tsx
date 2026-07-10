@@ -30,8 +30,8 @@ import {
 import { engineApi, knowledgeApi, projectsApi, workspacesApi } from "@/lib/api"
 import { useWorkspaceStore } from "@/stores/workspace"
 import { useAuthStore } from "@/stores/auth"
-import { useTasksStore } from "@/stores/tasks"
-import type { Project } from "@flora/types"
+import { useTasks } from "@/stores/tasks"
+import type { Project, Task } from "@flora/types"
 
 /* ── helpers ── */
 
@@ -293,7 +293,6 @@ function ProjectRow({ project }: { project: Project }) {
 export default function WorkspacePage() {
   const user = useAuthStore((s) => s.user)
   const { activeWorkspaceId } = useWorkspaceStore()
-  const { tasks } = useTasksStore()
 
   const { data: workspaces = [] } = useQuery({
     queryKey: ["workspaces"],
@@ -301,6 +300,7 @@ export default function WorkspacePage() {
   })
 
   const workspaceId = activeWorkspaceId ?? workspaces[0]?.id
+  const { data: tasks = [] } = useTasks(workspaceId ?? null)
   const activeWorkspace = workspaces.find((w) => w.id === workspaceId) ?? workspaces[0]
 
   const { data: projects = [], isLoading: projLoading } = useQuery({
@@ -324,7 +324,7 @@ export default function WorkspacePage() {
     retry: 1,
   })
 
-  const openTasks = tasks.filter((t) => t.status !== "done").length
+  const openTasks = tasks.filter((t: Task) => t.status !== "done").length
 
   const quickActions = [
     {
@@ -507,7 +507,7 @@ export default function WorkspacePage() {
           </Card>
 
           {/* Open tasks preview */}
-          {tasks.filter((t) => t.status !== "done").length > 0 && (
+          {tasks.filter((t: Task) => t.status !== "done").length > 0 && (
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -519,9 +519,9 @@ export default function WorkspacePage() {
               </CardHeader>
               <CardContent className="space-y-1.5 pb-4">
                 {tasks
-                  .filter((t) => t.status !== "done")
+                  .filter((t: Task) => t.status !== "done")
                   .slice(0, 4)
-                  .map((task) => (
+                  .map((task: Task) => (
                     <div key={task.id} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
                       <div
                         className={cn(
