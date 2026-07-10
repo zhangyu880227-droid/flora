@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
 import {
   ArrowRight,
-  BookOpen,
   Bot,
   Brain,
   CheckSquare,
@@ -50,16 +49,6 @@ function formatDate(): string {
   })
 }
 
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const m = Math.floor(diff / 60_000)
-  if (m < 1) return "just now"
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
-
 /* ── Welcome banner ── */
 function WelcomeBanner({ name, workspaceName }: { name?: string | null; workspaceName?: string }) {
   return (
@@ -79,7 +68,7 @@ function WelcomeBanner({ name, workspaceName }: { name?: string | null; workspac
           <p className="text-sm font-medium text-emerald-100/80">{formatDate()}</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">{greeting(name)}</h1>
           <p className="mt-1 text-sm text-emerald-100/70">
-            {workspaceName ? `${workspaceName} · ` : ""}Your intelligence workspace is ready.
+            {workspaceName ? `${workspaceName} · ` : ""}Your intelligence workspace is ready
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button size="sm" className="border-0 bg-white/20 text-white backdrop-blur-sm hover:bg-white/30" asChild>
@@ -161,7 +150,7 @@ function BriefingCard({ workspaceId }: { workspaceId: string }) {
           <div className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-500/10">
             <Brain className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
           </div>
-          <CardTitle className="text-sm font-semibold">Today's Intelligence</CardTitle>
+          <CardTitle className="text-sm font-semibold">Today&apos;s Intelligence</CardTitle>
           {data && (
             <Badge variant="secondary" className="ml-auto text-xs font-normal">
               {data.recentDocCount} new today

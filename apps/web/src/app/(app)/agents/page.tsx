@@ -15,7 +15,6 @@ import {
   MessageSquare,
   RefreshCw,
   Rss,
-  Sparkles,
   Upload,
   Zap,
   XCircle,
