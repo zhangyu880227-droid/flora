@@ -6,12 +6,20 @@ import {
   CheckSquare,
   Circle,
   Clock,
+  Loader2,
   Plus,
   Trash2,
   X,
 } from "lucide-react"
 import { Badge, Button, Card, CardContent, Input, Label, cn } from "@flora/ui"
-import { useTasksStore, type Task, type TaskPriority, type TaskStatus } from "@/stores/tasks"
+import type { Task, TaskPriority, TaskStatus } from "@flora/types"
+import {
+  useCreateTask,
+  useDeleteTask,
+  useTasks,
+  useUpdateTask,
+} from "@/stores/tasks"
+import { useWorkspaceStore } from "@/stores/workspace"
 
 /* ── helpers ── */
 
@@ -38,9 +46,15 @@ function relativeTime(iso: string): string {
 }
 
 /* ── Task card ── */
-function TaskCard({ task }: { task: Task }) {
-  const { updateTask, deleteTask } = useTasksStore()
-
+function TaskCard({
+  task,
+  onUpdate,
+  onDelete,
+}: {
+  task: Task
+  onUpdate: (taskId: string, status: TaskStatus) => void
+  onDelete: (taskId: string) => void
+}) {
   const StatusIcon = STATUS_CONFIG[task.status].icon
 
   const nextStatus: TaskStatus =
@@ -55,7 +69,7 @@ function TaskCard({ task }: { task: Task }) {
     >
       {/* Status toggle */}
       <button
-        onClick={() => updateTask(task.id, { status: nextStatus })}
+        onClick={() => onUpdate(task.id, nextStatus)}
         className={cn(
           "mt-0.5 shrink-0 transition-colors",
           STATUS_CONFIG[task.status].color,
@@ -86,16 +100,13 @@ function TaskCard({ task }: { task: Task }) {
           >
             {PRIORITY_CONFIG[task.priority].label}
           </Badge>
-          {task.projectName && (
-            <span className="text-[10px] text-muted-foreground">{task.projectName}</span>
-          )}
           <span className="text-[10px] text-muted-foreground/50">{relativeTime(task.createdAt)}</span>
         </div>
       </div>
 
       {/* Delete */}
       <button
-        onClick={() => deleteTask(task.id)}
+        onClick={() => onDelete(task.id)}
         className="shrink-0 rounded-md p-1 text-muted-foreground/0 transition-all group-hover:text-muted-foreground/50 hover:bg-destructive/10 hover:!text-destructive"
         title="Delete task"
       >
@@ -106,8 +117,13 @@ function TaskCard({ task }: { task: Task }) {
 }
 
 /* ── New task form ── */
-function NewTaskForm({ onClose }: { onClose: () => void }) {
-  const { addTask } = useTasksStore()
+function NewTaskForm({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void
+  onCreate: (title: string, description: string | undefined, priority: TaskPriority) => void
+}) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [priority, setPriority] = useState<TaskPriority>("medium")
@@ -115,7 +131,7 @@ function NewTaskForm({ onClose }: { onClose: () => void }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim()) return
-    addTask({ title: title.trim(), description: description.trim() || undefined, status: "todo", priority })
+    onCreate(title.trim(), description.trim() || undefined, priority)
     onClose()
   }
 
@@ -182,9 +198,13 @@ function NewTaskForm({ onClose }: { onClose: () => void }) {
 function StatusColumn({
   status,
   tasks,
+  onUpdate,
+  onDelete,
 }: {
   status: TaskStatus
   tasks: Task[]
+  onUpdate: (taskId: string, status: TaskStatus) => void
+  onDelete: (taskId: string) => void
 }) {
   const { label, icon: Icon, color } = STATUS_CONFIG[status]
 
@@ -205,7 +225,9 @@ function StatusColumn({
             <p className="text-xs text-muted-foreground">No tasks</p>
           </div>
         ) : (
-          tasks.map((t) => <TaskCard key={t.id} task={t} />)
+          tasks.map((t) => (
+            <TaskCard key={t.id} task={t} onUpdate={onUpdate} onDelete={onDelete} />
+          ))
         )}
       </div>
     </div>
@@ -214,9 +236,26 @@ function StatusColumn({
 
 /* ── Page ── */
 export default function TasksPage() {
-  const { tasks } = useTasksStore()
+  const { activeWorkspaceId } = useWorkspaceStore()
+  const { data: tasks = [], isLoading } = useTasks(activeWorkspaceId)
+  const createTask = useCreateTask(activeWorkspaceId)
+  const updateTask = useUpdateTask(activeWorkspaceId)
+  const deleteTask = useDeleteTask(activeWorkspaceId)
+
   const [showForm, setShowForm] = useState(false)
   const [filter, setFilter] = useState<TaskStatus | "all">("all")
+
+  function handleCreate(title: string, description: string | undefined, priority: TaskPriority) {
+    createTask.mutate({ title, description, status: "todo", priority })
+  }
+
+  function handleUpdate(taskId: string, status: TaskStatus) {
+    updateTask.mutate({ taskId, body: { status } })
+  }
+
+  function handleDelete(taskId: string) {
+    deleteTask.mutate(taskId)
+  }
 
   const byStatus: Record<TaskStatus, Task[]> = {
     todo:        tasks.filter((t) => t.status === "todo"),
@@ -227,14 +266,13 @@ export default function TasksPage() {
   const filteredForList =
     filter === "all" ? tasks : tasks.filter((t) => t.status === filter)
 
-  const completedToday = tasks.filter((t) => {
-    if (!t.completedAt) return false
-    const d = new Date(t.completedAt)
-    const now = new Date()
-    return d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate()
-  }).length
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6 pb-12">
@@ -248,7 +286,7 @@ export default function TasksPage() {
             <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
             <p className="text-sm text-muted-foreground">
               {tasks.filter((t) => t.status !== "done").length} open ·{" "}
-              {completedToday} completed today
+              {tasks.filter((t) => t.status === "done").length} done
             </p>
           </div>
         </div>
@@ -263,7 +301,14 @@ export default function TasksPage() {
       {/* New task form */}
       {showForm && (
         <div className="animate-fade-up">
-          <NewTaskForm onClose={() => setShowForm(false)} />
+          <NewTaskForm onClose={() => setShowForm(false)} onCreate={handleCreate} />
+        </div>
+      )}
+
+      {/* No workspace warning */}
+      {!activeWorkspaceId && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+          Select a workspace to see your tasks.
         </div>
       )}
 
@@ -312,18 +357,26 @@ export default function TasksPage() {
               </p>
             </div>
           ) : (
-            filteredForList.map((t) => <TaskCard key={t.id} task={t} />)
+            filteredForList.map((t) => (
+              <TaskCard key={t.id} task={t} onUpdate={handleUpdate} onDelete={handleDelete} />
+            ))
           )}
         </div>
       ) : (
         <div className="animate-fade-up-2 grid gap-6 lg:grid-cols-3">
           {(["todo", "in_progress", "done"] as TaskStatus[]).map((status) => (
-            <StatusColumn key={status} status={status} tasks={byStatus[status]} />
+            <StatusColumn
+              key={status}
+              status={status}
+              tasks={byStatus[status]}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
       )}
 
-      {tasks.length === 0 && (
+      {tasks.length === 0 && activeWorkspaceId && (
         <div className="flex flex-col items-center rounded-2xl border border-dashed py-16 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
             <CheckSquare className="h-6 w-6 text-muted-foreground" />

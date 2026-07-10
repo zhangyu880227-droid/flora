@@ -1,88 +1,63 @@
-import { create } from "zustand"
-import { persist } from "zustand/middleware"
+/**
+ * Tasks — React Query hooks replacing the former Zustand localStorage store.
+ * The API is workspace-scoped; callers must supply the active workspace ID.
+ */
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { tasksApi } from "@/lib/api"
+import type { CreateTaskRequest, Task, TaskStatus, UpdateTaskRequest } from "@flora/types"
 
-export type TaskStatus = "todo" | "in_progress" | "done"
+export type { Task, TaskStatus }
 export type TaskPriority = "low" | "medium" | "high"
 
-export interface Task {
-  id: string
-  title: string
-  description?: string
-  status: TaskStatus
-  priority: TaskPriority
-  projectId?: string
-  projectName?: string
-  createdAt: string
-  completedAt?: string
+// ── Query keys ─────────────────────────────────────────────────────────────
+
+export const taskKeys = {
+  all: (workspaceId: string) => ["tasks", workspaceId] as const,
+  list: (workspaceId: string, filters?: object) =>
+    ["tasks", workspaceId, "list", filters] as const,
 }
 
-interface TasksStore {
-  tasks: Task[]
-  addTask: (task: Omit<Task, "id" | "createdAt">) => void
-  updateTask: (id: string, updates: Partial<Omit<Task, "id" | "createdAt">>) => void
-  deleteTask: (id: string) => void
+// ── Hooks ──────────────────────────────────────────────────────────────────
+
+export function useTasks(
+  workspaceId: string | null,
+  params?: { status?: TaskStatus; projectId?: string },
+) {
+  return useQuery({
+    queryKey: taskKeys.list(workspaceId ?? "", params),
+    queryFn: () => tasksApi.list(workspaceId!, params),
+    enabled: !!workspaceId,
+    staleTime: 30_000,
+  })
 }
 
-export const useTasksStore = create<TasksStore>()(
-  persist(
-    (set) => ({
-      tasks: [
-        {
-          id: "task_seed_1",
-          title: "Review Q3 market research sources",
-          description: "Go through uploaded PDFs and tag key findings",
-          status: "in_progress",
-          priority: "high",
-          createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
-        },
-        {
-          id: "task_seed_2",
-          title: "Generate competitor analysis insight",
-          description: "Use AI to synthesize sources into a structured report",
-          status: "todo",
-          priority: "medium",
-          createdAt: new Date(Date.now() - 86_400_000).toISOString(),
-        },
-        {
-          id: "task_seed_3",
-          title: "Upload annual report PDFs",
-          status: "done",
-          priority: "low",
-          createdAt: new Date(Date.now() - 4 * 86_400_000).toISOString(),
-          completedAt: new Date(Date.now() - 86_400_000).toISOString(),
-        },
-      ],
-      addTask: (task) =>
-        set((s) => ({
-          tasks: [
-            {
-              ...task,
-              id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-              createdAt: new Date().toISOString(),
-            },
-            ...s.tasks,
-          ],
-        })),
-      updateTask: (id, updates) =>
-        set((s) => ({
-          tasks: s.tasks.map((t) =>
-            t.id === id
-              ? {
-                  ...t,
-                  ...updates,
-                  completedAt:
-                    updates.status === "done" && t.status !== "done"
-                      ? new Date().toISOString()
-                      : updates.status && updates.status !== "done"
-                        ? undefined
-                        : t.completedAt,
-                }
-              : t,
-          ),
-        })),
-      deleteTask: (id) =>
-        set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) })),
-    }),
-    { name: "flora-tasks" },
-  ),
-)
+export function useCreateTask(workspaceId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateTaskRequest) => tasksApi.create(workspaceId!, body),
+    onSuccess: () => {
+      if (workspaceId) qc.invalidateQueries({ queryKey: taskKeys.all(workspaceId) })
+    },
+  })
+}
+
+export function useUpdateTask(workspaceId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ taskId, body }: { taskId: string; body: UpdateTaskRequest }) =>
+      tasksApi.update(workspaceId!, taskId, body),
+    onSuccess: () => {
+      if (workspaceId) qc.invalidateQueries({ queryKey: taskKeys.all(workspaceId) })
+    },
+  })
+}
+
+export function useDeleteTask(workspaceId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (taskId: string) => tasksApi.delete(workspaceId!, taskId),
+    onSuccess: () => {
+      if (workspaceId) qc.invalidateQueries({ queryKey: taskKeys.all(workspaceId) })
+    },
+  })
+}
