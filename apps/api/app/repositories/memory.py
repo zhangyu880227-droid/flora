@@ -86,6 +86,27 @@ class MemoryRepository(BaseRepository[Memory]):
         await self.db.flush()
         return memory
 
+    async def list_for_workspace(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        memory_type: MemoryType | None = None,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[Memory]:
+        """Query all memories in a workspace regardless of user (for engine tasks)."""
+        filters = [Memory.workspace_id == workspace_id]
+        if memory_type is not None:
+            filters.append(Memory.memory_type == memory_type)
+        result = await self.db.execute(
+            select(Memory)
+            .where(*filters)
+            .order_by(Memory.created_at.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.scalars().all())
+
     async def purge_working_memory(
         self,
         workspace_id: uuid.UUID,
